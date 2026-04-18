@@ -28,36 +28,36 @@ pub fn quad_transfer_matrix(
     L: f32,     // Effective length
     B_rho: f32, // The beam rigidity
 ) -> (Array2<f32>, Array2<f32>) {
-    let k2 = g / B_rho; 
-    let k = k2.abs().sqrt();
+    let k = g / B_rho; // Focusing strength
+    let kr = k.abs().sqrt();
 
-    if k2.abs() < 1e-9 {
+    if k.abs() < 1e-9 {
         // Near-zero gradient: both planes are drifts
         let drift = drift_matrix(L);
         return (drift.clone(), drift);
     }
 
-    if k2 > 0.0 {
+    if k > 0.0 {
         // Focusing in x, Defocusing in y
         let M_f = array![
-            [(L * k).cos(), (L * k).sin() / k],
-            [-1.0 * (L * k).sin() * k.sqrt(), (L * k).cos()]
+            [(L * kr).cos(), (L * kr).sin() / kr],
+            [-1.0 * (L * kr).sin() * k.sqrt(), (L * kr).cos()]
         ];
         let M_d = array![
-            [(L * k).cosh(), (L * k).sinh() / k],
-            [(L * k).sinh() * k, (L * k).cosh()]
+            [(L * kr).cosh(), (L * kr).sinh() / kr],
+            [(L * kr).sinh() * k, (L * kr).cosh()]
         ];
 
         (M_f, M_d)
     } else {
         // Defocusing in x, Focusing in y
         let M_f = array![
-            [(L * k).cosh(), (L * k).sinh() / k],
-            [-1.0 * (L * k).sinh() * k, (L * k).cosh()]
+            [(L * kr).cosh(), (L * kr).sinh() / kr],
+            [-1.0 * (L * kr).sinh() * kr, (L * kr).cosh()]
         ];
         let M_d = array![
-            [(L * k).cos(), (L * k).sin() / k],
-            [-1.0 * (L * k).sin() * k, (L * k).cos()]
+            [(L * kr).cos(), (L * kr).sin() / kr],
+            [-1.0 * (L * kr).sin() * kr, (L * kr).cos()]
         ];
 
         (M_f, M_d)
