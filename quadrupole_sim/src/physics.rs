@@ -2,7 +2,7 @@
 use anyhow::Result;
 use ndarray::{Array2, array};
 
-use crate::{C_Tm, PROTON_MASS};
+use crate::{C_TM, PROTON_MASS};
 
 /// Calculates the beam rigidity (B_rho)
 /// Dimensions: T*m
@@ -10,7 +10,7 @@ use crate::{C_Tm, PROTON_MASS};
 pub fn beam_rigidity(ke_mev: f32) -> f32 {
     let p = ((ke_mev + PROTON_MASS).powi(2) - PROTON_MASS.powi(2)).sqrt(); // Momentum
 
-    p / C_Tm
+    p / C_TM
 }
 
 /// Calculates the quadrupole transfer matrix
