@@ -2,7 +2,7 @@
 use anyhow::Result;
 use ndarray::{Array2, array};
 
-use crate::{C_TM, PROTON_MASS};
+use crate::{C_TM, MU0, PROTON_MASS};
 
 /// Calculates the beam rigidity (B_rho)
 /// Dimensions: T*m
@@ -11,6 +11,15 @@ pub fn beam_rigidity(ke_mev: f32) -> f32 {
     let p = ((ke_mev + PROTON_MASS).powi(2) - PROTON_MASS.powi(2)).sqrt(); // Momentum
 
     p / C_TM
+}
+
+/// Calculates the field gradient
+/// Dimensions: T/m
+/// Parameters: i [current], n [turns], r [radius]
+pub fn field_gradient(i: f32, n: usize, r: f32) -> f32 {
+    let ampere_turns = (n as f32)*i;
+    
+    2.0*MU0*ampere_turns / r.powi(2)
 }
 
 /// Calculates the quadrupole transfer matrix
