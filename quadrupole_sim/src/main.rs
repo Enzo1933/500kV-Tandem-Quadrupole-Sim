@@ -3,7 +3,7 @@ mod physics;
 use ndarray::*;
 
 /// Constants in terms of Natural Units
-const PROTON_MASS: f32 = 938.6; // The mass of a proton in MeV/c^2
+const PROTON_MASS: f32 = 938.7; // The mass of a proton in MeV/c^2
 const PROTON_CHARGE: f32 = 1.0; // Electric Charge
 const MU0: f32 = 1.0; // Magnetic permeability
 const C: f32 = 1.0; // Speed of light c = 1
