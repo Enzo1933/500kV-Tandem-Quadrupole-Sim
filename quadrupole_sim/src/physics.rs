@@ -17,9 +17,9 @@ pub fn beam_rigidity(ke_mev: f32) -> f32 {
 /// Dimensions: T/m
 /// Parameters: i [current], n [turns], r [radius]
 pub fn field_gradient(i: f32, n: usize, r: f32) -> f32 {
-    let ampere_turns = (n as f32)*i;
-    
-    2.0*MU0*ampere_turns / r.powi(2)
+    let ampere_turns = (n as f32) * i;
+
+    2.0 * MU0 * ampere_turns / r.powi(2)
 }
 
 /// Calculates the quadrupole transfer matrix
@@ -40,30 +40,27 @@ pub fn quad_transfer_matrix(
     if k2 > 0.0 {
         // Focusing in x, Defocusing in y
         let M_f = array![
-            [(L * k.sqrt()).cos(), (L * k.sqrt()).sin() / k.sqrt()],
-            [-1.0 * (L * k.sqrt()).sin() * k.sqrt(), (L * k.sqrt()).cos()]
+            [(L * k).cos(), (L * k).sin() / k],
+            [-1.0 * (L * k).sin() * k.sqrt(), (L * k).cos()]
         ];
         let M_d = array![
-            [(L * k.sqrt()).cosh(), (L * k.sqrt()).sinh() / k.sqrt()],
-            [
-                -1.0 * (L * k.sqrt()).sinh() * k.sqrt(),
-                (L * k.sqrt()).cosh()
-            ]
+            [(L * k).cosh(), (L * k).sinh() / k],
+            [-1.0 * (L * k).sinh() * k, (L * k).cosh()]
         ];
 
         Ok((M_f, M_d))
     } else {
         // Defocusing in x, Focusing in y
         let M_f = array![
-            [(L * k.sqrt()).cosh(), (L * k.sqrt()).sinh() / k.sqrt()],
+            [(L * k).cosh(), (L * k).sinh() / k],
             [
-                -1.0 * (L * k.sqrt()).sinh() * k.sqrt(),
-                (L * k.sqrt()).cosh()
+                -1.0 * (L * k).sinh() * k,
+                (L * k).cosh()
             ]
         ];
         let M_d = array![
-            [(L * k.sqrt()).cos(), (L * k.sqrt()).sin() / k.sqrt()],
-            [-1.0 * (L * k.sqrt()).sin() * k.sqrt(), (L * k.sqrt()).cos()]
+            [(L * k).cos(), (L * k).sin() / k],
+            [-1.0 * (L * k).sin() * k, (L * k).cos()]
         ];
 
         Ok((M_f, M_d))
