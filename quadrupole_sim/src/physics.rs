@@ -131,18 +131,18 @@ impl Tracker {
         for (r, g, length) in regions {
             let n = usize::max((n_steps as f64 * length / total_length) as usize, 4);
             let dz = length / n as f64;
-
+            let (Mx, My) = quad_transfer_matrix(g, dz, Brho);
+            let drift = drift_matrix(dz);
+            
             for _ in 0..n {
                 match r {
                     "quad" => {
-                        let (Mx, My) = quad_transfer_matrix(g, dz, Brho);
-
                         x_state = Mx.dot(&x_state);
                         y_state = My.dot(&y_state);
                     }
                     _ => {
-                        x_state = drift_matrix(dz).dot(&x_state);
-                        y_state = drift_matrix(dz).dot(&y_state);
+                        x_state = drift.dot(&x_state);
+                        y_state = drift.dot(&y_state);
                     }
                 }
 
