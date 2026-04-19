@@ -213,7 +213,7 @@ impl Tracker {
         })
     }
 
-    pub fn optimize_fast(args: &Beam) -> Option<(f64, f64)> {
+    pub fn optimize_nr(args: &Beam) -> Option<(f64, f64)> {
         let mut g = array![20.0, 20.0]; // [g1, g2]
         let eps = EPSILON; // Finite difference step
         let mut learning_rate = 0.5; // Damping to prevent overshooting
