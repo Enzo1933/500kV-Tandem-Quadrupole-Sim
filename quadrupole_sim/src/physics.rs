@@ -83,12 +83,25 @@ fn find_crossovers(arr: &[f64], z: &[f64]) -> Vec<f64> {
 
 /// Beam struct
 pub struct Beam {
-    L_mag: f64,
-    gap: f64,
-    drift: f64,
+    L_mag_m: f64,
+    gap_m: f64,
+    drift_m: f64,
     energy_MeV: f64,
     x0: f64,
     xp0: f64,
+}
+
+impl Beam {
+    pub fn new(L_mag_m: f64, gap_m: f64, drift_m: f64, energy_MeV: f64, x0: f64, xp0: f64) -> Self {
+        Beam {
+            L_mag_m,
+            gap_m,
+            drift_m,
+            energy_MeV,
+            x0,
+            xp0,
+        }
+    }
 }
 
 /// The envelope tracker struct
@@ -114,16 +127,18 @@ impl Tracker {
     /// Track beam envelope through FDF triplet.
     /// Returns a Tracker data structure with z positions, x/y envelopes, region boundaries, crossovers, etc.
     pub fn new(
-        L_mag_m: f64, // Magnet length in meters 
-        gap_m: f64,   // Gap length in meters
-        drift_m: f64, // Drift length in meters
+        beam: &Beam,
         g1: f64,      // The first field gradient
         g2: f64,      // The second field gradient
-        energy_MeV: f64,
-        x0: f64,
-        xp0: f64,
         n_steps: usize,
     ) -> Result<Tracker> {
+        let L_mag_m: f64 = beam.L_mag_m;
+        let gap_m: f64 = beam.gap_m;
+        let drift_m: f64 = beam.drift_m;
+        let energy_MeV = beam.energy_MeV;
+        let x0 = beam.x0;
+        let xp0 = beam.xp0;
+
         let Brho = beam_rigidity(energy_MeV);
         let total_length = (3.0 * L_mag_m) + gap_m + (2.0 * drift_m);
 
@@ -204,7 +219,7 @@ impl Tracker {
         for _ in 0..10 {
             // 1. Calculate current errors (Residuals)
             let res = Self::get_residuals(g[0], g[1], args);
-            
+
             // 2. Compute Jacobian Matrix (Numerical Derivates)
             // J_ij = d(residual_i) / d(gradient_j)
             let res_g1 = Self::get_residuals(g[0] + eps, g[1], args);
@@ -217,16 +232,18 @@ impl Tracker {
 
             // 3. Solve J * delta = -res  => delta = J^-1 * -res
             // For a 2x2, we can just do the direct inversion math
-            let det = jacobian[[0,0]] * jacobian[[1,1]] - jacobian[[0,1]] * jacobian[[1,0]];
-            if det.abs() < 1e-12 { break; }
+            let det = jacobian[[0, 0]] * jacobian[[1, 1]] - jacobian[[0, 1]] * jacobian[[1, 0]];
+            if det.abs() < 1e-12 {
+                break;
+            }
 
             let inv_j = array![
-                [jacobian[[1,1]] / det, -jacobian[[0,1]] / det],
-                [-jacobian[[1,0]] / det, jacobian[[0,0]] / det]
+                [jacobian[[1, 1]] / det, -jacobian[[0, 1]] / det],
+                [-jacobian[[1, 0]] / det, jacobian[[0, 0]] / det]
             ];
 
             let delta = &inv_j.dot(&(-1.0 * res));
-            
+
             // 4. Update gradients
             g += &(delta * learning_rate);
 
@@ -237,10 +254,16 @@ impl Tracker {
         Some((g[0], g[1]))
     }
 
-    fn get_residuals(g1: f64, g2: f64, args: &Beam) -> Array1<f64> {
-        let t = Self::new(args.L_mag, args.gap, args.drift, g1, g2, args.energy_MeV, args.x0, args.xp0, 50).unwrap();
+    fn get_residuals(g1: f64, g2: f64, beam: &Beam) -> Array1<f64> {
+        let t = Self::new(
+            beam,
+            g1,
+            g2,
+            50,
+        )
+        .unwrap();
         // residual 0: asymmetry
-        // residual 1: total size 
+        // residual 1: total size
         array![t.x_f - t.y_f, t.x_f + t.y_f]
     }
 }
