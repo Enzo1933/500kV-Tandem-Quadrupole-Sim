@@ -213,6 +213,7 @@ impl Tracker {
         })
     }
 
+    /// Optimization using Newton-Raphson
     pub fn optimize_nr(args: &Beam) -> Option<(f64, f64)> {
         let mut g = array![20.0, 20.0]; // [g1, g2]
         let eps = EPSILON; // Finite difference step
