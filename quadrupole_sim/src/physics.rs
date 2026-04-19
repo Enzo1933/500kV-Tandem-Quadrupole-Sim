@@ -92,6 +92,8 @@ pub struct Tracker {
     q1_end: f64,
     q2_start: f64,
     q2_end: f64,
+    q3_start: f64,
+    q3_end: f64,
     x_xover: Vec<f64>,
     y_xover: Vec<f64>,
     max_env_x: f64,
@@ -112,11 +114,13 @@ impl Tracker {
         n_steps: usize,
     ) -> Result<Tracker> {
         let Brho = beam_rigidity(energy_MeV);
-        let total_length = L_mag_m + gap_m + L_mag_m + drift_m;
+        let total_length = (3.0 * L_mag_m) + gap_m + (2.0 * drift_m);
 
         let regions = [
             ("quad", g1, L_mag_m),
             ("drift", 0.0, gap_m),
+            ("quad", -g1, L_mag_m),
+            ("drift", 0.0, drift_m),
             ("quad", -g1, L_mag_m),
             ("drift", 0.0, drift_m),
         ];
@@ -131,20 +135,15 @@ impl Tracker {
         for (r, g, length) in regions {
             let n = usize::max((n_steps as f64 * length / total_length) as usize, 4);
             let dz = length / n as f64;
-            let (Mx, My) = quad_transfer_matrix(g, dz, Brho);
-            let drift = drift_matrix(dz);
-            
+
+            let (Mx, My) = match r{
+                "quad" => quad_transfer_matrix(g, dz, Brho),
+                _ => (drift_matrix(dz), drift_matrix(dz))
+            };
+
             for _ in 0..n {
-                match r {
-                    "quad" => {
-                        x_state = Mx.dot(&x_state);
-                        y_state = My.dot(&y_state);
-                    }
-                    _ => {
-                        x_state = drift.dot(&x_state);
-                        y_state = drift.dot(&y_state);
-                    }
-                }
+                x_state = Mx.dot(&x_state);
+                y_state = My.dot(&y_state);
 
                 z.push(z.last().unwrap() + dz);
                 x.push(x_state[0]);
@@ -161,6 +160,12 @@ impl Tracker {
         let x_xover = find_crossovers(&x, &z);
         let y_xover = find_crossovers(&y, &z);
 
+        let q1_end = L_mag_m;
+        let q2_start = q1_end + gap_m;
+        let q2_end = q2_start + L_mag_m;
+        let q3_start = q2_end + drift_m;
+        let q3_end = q3_start + L_mag_m;
+
         Ok(Tracker {
             x,
             y,
@@ -168,9 +173,11 @@ impl Tracker {
             x_f,
             y_f,
             total_length,
-            q1_end: L_mag_m,
-            q2_start: L_mag_m + gap_m,
-            q2_end: 2.0 * L_mag_m + gap_m,
+            q1_end,
+            q2_start,
+            q2_end,
+            q3_start,
+            q3_end,
             x_xover,
             y_xover,
             max_env_x,
