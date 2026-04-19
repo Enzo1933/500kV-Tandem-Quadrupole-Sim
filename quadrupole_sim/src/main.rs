@@ -1,3 +1,4 @@
+#![allow(unused)]
 mod physics;
 
 /// Constants in terms of Natural Units
