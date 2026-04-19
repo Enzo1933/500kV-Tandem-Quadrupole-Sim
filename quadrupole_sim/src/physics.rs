@@ -81,6 +81,16 @@ fn find_crossovers(arr: &[f64], z: &[f64]) -> Vec<f64> {
     crossovers
 }
 
+/// Beam struct
+pub struct Beam {
+    L_mag: f64,
+    gap: f64,
+    drift: f64,
+    energy_MeV: f64,
+    x0: f64,
+    xp0: f64,
+}
+
 /// The envelope tracker struct
 pub struct Tracker {
     x: Vec<f64>,
@@ -104,7 +114,7 @@ impl Tracker {
     /// Track beam envelope through FDF triplet.
     /// Returns a Tracker data structure with z positions, x/y envelopes, region boundaries, crossovers, etc.
     pub fn new(
-        L_mag_m: f64, // Magnet length in meters
+        L_mag_m: f64, // Magnet length in meters 
         gap_m: f64,   // Gap length in meters
         drift_m: f64, // Drift length in meters
         g1: f64,      // The first field gradient
@@ -186,96 +196,51 @@ impl Tracker {
         })
     }
 
-    /// Performs Coordinate Descent to optimize both g1 and g2.
-    pub fn optimize_triplet(
-        L_mag_m: f64,
-        gap_m: f64,
-        drift_m: f64,
-        energy_MeV: f64,
-        x0: f64,
-        xp0: f64,
-        bore: f64,
-    ) -> Option<(f64, f64)> {
-        let mut g1 = 20.0; // Initial guess for outer quads
-        let mut g2 = 20.0; // Initial guess for inner quad
+    pub fn optimize_fast(args: &Beam) -> Option<(f64, f64)> {
+        let mut g = array![20.0, 20.0]; // [g1, g2]
+        let eps = 1e-4; // Finite difference step
+        let mut learning_rate = 0.5; // Damping to prevent overshooting
 
-        let mut last_g1 = g1;
-        let mut last_g2 = g2;
+        for _ in 0..10 {
+            // 1. Calculate current errors (Residuals)
+            let res = Self::get_residuals(g[0], g[1], args);
+            
+            // 2. Compute Jacobian Matrix (Numerical Derivates)
+            // J_ij = d(residual_i) / d(gradient_j)
+            let res_g1 = Self::get_residuals(g[0] + eps, g[1], args);
+            let res_g2 = Self::get_residuals(g[0], g[1] + eps, args);
 
-        // Coordinate Descent: Toggle between optimizing g1 and g2
-        for _ in 0..15 {
-            // Optimize g1 (holding g2 constant)
-            g1 = Self::golden_section_1d(0.1, 100.0, |test_g1| {
-                Self::eval_fitness(
-                    L_mag_m, gap_m, drift_m, test_g1, g2, energy_MeV, x0, xp0, bore,
-                )
-            });
+            let jacobian = array![
+                [(res_g1[0] - res[0]) / eps, (res_g2[0] - res[0]) / eps],
+                [(res_g1[1] - res[1]) / eps, (res_g2[1] - res[1]) / eps]
+            ];
 
-            // Optimize g2 (holding g1 constant)
-            g2 = Self::golden_section_1d(0.1, 100.0, |test_g2| {
-                Self::eval_fitness(
-                    L_mag_m, gap_m, drift_m, g1, test_g2, energy_MeV, x0, xp0, bore,
-                )
-            });
+            // 3. Solve J * delta = -res  => delta = J^-1 * -res
+            // For a 2x2, we can just do the direct inversion math
+            let det = jacobian[[0,0]] * jacobian[[1,1]] - jacobian[[0,1]] * jacobian[[1,0]];
+            if det.abs() < 1e-12 { break; }
 
-            last_g1 = g1;
-            last_g2 = g2;
+            let inv_j = array![
+                [jacobian[[1,1]] / det, -jacobian[[0,1]] / det],
+                [-jacobian[[1,0]] / det, jacobian[[0,0]] / det]
+            ];
+
+            let delta = &inv_j.dot(&(-1.0 * res));
+            
+            // 4. Update gradients
+            g += &(delta * learning_rate);
+
+            if delta.dot(delta).sqrt() < 1e-5 {
+                return Some((g[0], g[1]));
+            }
         }
-
-        // Final validation
-        let final_score =
-            Self::eval_fitness(L_mag_m, gap_m, drift_m, g1, g2, energy_MeV, x0, xp0, bore);
-        if final_score > 1.0 {
-            None
-        } else {
-            Some((g1, g2))
-        }
+        Some((g[0], g[1]))
     }
 
-    /// Generic 1D Golden Section Search
-    fn golden_section_1d<F>(mut a: f64, mut b: f64, mut cost_fn: F) -> f64
-    where
-        F: FnMut(f64) -> f64,
-    {
-        let phi = (5.0_f64.sqrt() - 1.0) / 2.0;
-        let mut c = b - phi * (b - a);
-        let mut d = a + phi * (b - a);
-
-        for _ in 0..40 {
-            if cost_fn(c) < cost_fn(d) {
-                b = d;
-            } else {
-                a = c;
-            }
-            c = b - phi * (b - a);
-            d = a + phi * (b - a);
-        }
-        (a + b) / 2.0
-    }
-
-    /// Fitness function 
-    fn eval_fitness(
-        L: f64,
-        gap: f64,
-        drift: f64,
-        g1: f64,
-        g2: f64,
-        en: f64,
-        x0: f64,
-        xp0: f64,
-        bore: f64,
-    ) -> f64 {
-        match Self::new(L, gap, drift, g1, g2, en, x0, xp0, 150) {
-            Ok(t) => {
-                if t.max_env_x > bore || t.max_env_y > bore {
-                    return 1e9; // Penalty for hitting the pipe
-                }
-                // Balance symmetry and minimize final divergence/size
-                let asymmetry = (t.x_f - t.y_f).abs();
-                let size = t.x_f + t.y_f;
-                (asymmetry / (size + 1e-10)) + size
-            }
-            Err(_) => 1e12,
-        }
+    fn get_residuals(g1: f64, g2: f64, args: &Beam) -> Array1<f64> {
+        let t = Self::new(args.L_mag, args.gap, args.drift, g1, g2, args.energy_MeV, args.x0, args.xp0, 50).unwrap();
+        // residual 0: asymmetry
+        // residual 1: total size 
+        array![t.x_f - t.y_f, t.x_f + t.y_f]
     }
 }
