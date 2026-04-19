@@ -7,7 +7,7 @@ use crate::{C_TM, MU0, PROTON_MASS};
 /// Calculates the beam rigidity (B_rho)
 /// Dimensions: T*m
 /// Parameters: ke_mev [the kinetic energy in MeV]
-pub fn beam_rigidity(ke_mev: f64) -> f64 {
+fn beam_rigidity(ke_mev: f64) -> f64 {
     let p = ((ke_mev + PROTON_MASS).powi(2) - PROTON_MASS.powi(2)).sqrt(); // Momentum
 
     p / C_TM
@@ -16,7 +16,7 @@ pub fn beam_rigidity(ke_mev: f64) -> f64 {
 /// Calculates the field gradient
 /// Dimensions: T/m
 /// Parameters: i [current], n [turns], r [radius]
-pub fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64) -> f64 {
+fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64) -> f64 {
     let ni = (n as f64) * i;
     let kappa = 1.0 / mu_r;
 
@@ -24,7 +24,7 @@ pub fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64) -> f64 {
 }
 
 /// Calculates the quadrupole transfer matrix
-pub fn quad_transfer_matrix(
+fn quad_transfer_matrix(
     g: f64,     // Field gradient
     L: f64,     // Effective length
     B_rho: f64, // The beam rigidity
@@ -66,7 +66,7 @@ pub fn quad_transfer_matrix(
 }
 
 /// Returns a drift matrix
-pub fn drift_matrix(L: f64) -> Array2<f64> {
+fn drift_matrix(L: f64) -> Array2<f64> {
     array![[1.0, L], [0.0, 1.0]]
 }
 
@@ -101,7 +101,7 @@ struct Tracker {
 impl Tracker {
     /// Track beam envelope through FD doublet.
     /// Returns an Tracker data structure with z positions, x/y envelopes, region boundaries, crossovers, etc.
-    pub fn new(
+    pub fn track_envelope(
         L_mag_m: f64, // Magnet length in meters
         gap_m: f64,   // Gap length in meters
         drift_m: f64, // Drift length in meters
