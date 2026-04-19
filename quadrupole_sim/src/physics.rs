@@ -179,6 +179,7 @@ impl Tracker {
     }
 }
 
+/// Uses Golden Section Search for gradient optimization
 pub fn optimize_gradient(
     bore_m:     f64,
     l_mag_m:    f64,
