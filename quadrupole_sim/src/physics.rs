@@ -54,7 +54,7 @@ fn quad_transfer_matrix(
         // Defocusing in x, Focusing in y
         let M_f = array![
             [(L * kr).cosh(), (L * kr).sinh() / kr],
-            [-1.0 * (L * kr).sinh() * kr, (L * kr).cosh()]
+            [1.0 * (L * kr).sinh() * kr, (L * kr).cosh()]
         ];
         let M_d = array![
             [(L * kr).cos(), (L * kr).sin() / kr],
@@ -179,48 +179,45 @@ impl Tracker {
     }
 
     /// Uses Golden Section Search for gradient optimization
-    pub fn optimize_gradient(&self, bore_m: f64) -> Option<f64> {
+    pub fn optimize_gradient(
+        L_mag_m: f64,
+        gap_m: f64,
+        drift_m: f64,
+        energy_MeV: f64,
+        x0: f64,
+        xp0: f64,
+        bore: f64,
+    ) -> Option<f64> {
+        let phi = (5.0_f64.sqrt() - 1.0) / 2.0;
+        let mut a = 0.1;
+        let mut b = 100.0;
+
         let eval = |g: f64| -> Option<f64> {
-            if self.max_env_x > bore_m * 0.95 {
-                return None;
+            let t = Self::new(L_mag_m, gap_m, drift_m, g, energy_MeV, x0, xp0, 200).ok()?;
+            if t.max_env_x > bore || t.max_env_y > bore {
+                return Some(1e9);
             }
-            if self.max_env_y > bore_m * 0.95 {
-                return None;
-            }
-
-            let avg = (self.x_f + self.y_f) / 2.0;
-            if avg < 1e-12 {
-                return None;
-            }
-
-            Some((self.x_f - self.y_f).abs() / avg)
+            Some((t.x_f - t.y_f).abs() / (t.x_f + t.y_f + 1e-10))
         };
 
-        let phi = (5.0_f64.sqrt() - 1.0) / 2.0;
-        let tol = 1e-4;
-
-        let mut a = 0.1_f64;
-        let mut b = 50.0_f64;
         let mut c = b - phi * (b - a);
         let mut d = a + phi * (b - a);
 
-        while (b - a).abs() > tol {
-            let fc = eval(c).unwrap_or(f64::INFINITY);
-            let fd = eval(d).unwrap_or(f64::INFINITY);
-
-            if fc < fd {
+        for _ in 0..50 {
+            if eval(c) < eval(d) {
                 b = d;
             } else {
                 a = c;
             }
-
             c = b - phi * (b - a);
             d = a + phi * (b - a);
         }
 
         let g_opt = (a + b) / 2.0;
-
-        // Verify the solution is actually valid before returning
-        eval(g_opt).map(|_| g_opt)
+        if eval(g_opt) > Some(1.0) {
+            None
+        } else {
+            Some(g_opt)
+        }
     }
 }
