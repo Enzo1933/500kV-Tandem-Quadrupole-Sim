@@ -3,13 +3,15 @@ use std::f64::EPSILON;
 
 use anyhow::Result;
 use ndarray::{Array1, Array2, array};
+use std::io::Write;
+use std::fs::File;
 
 use crate::{C_TM, MU0, PROTON_MASS};
 
 /// Calculates the beam rigidity (B_rho)
 /// Dimensions: T*m
 /// Parameters: ke_mev [the kinetic energy in MeV]
-fn beam_rigidity(ke_mev: f64) -> f64 {
+pub fn beam_rigidity(ke_mev: f64) -> f64 {
     let p = ((ke_mev + PROTON_MASS).powi(2) - PROTON_MASS.powi(2)).sqrt(); // Momentum
 
     p / C_TM
@@ -18,15 +20,23 @@ fn beam_rigidity(ke_mev: f64) -> f64 {
 /// Calculates the field gradient
 /// Dimensions: T/m
 /// Parameters: i [current], n [turns], r [radius]
-fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64) -> f64 {
+pub fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64) -> f64 {
     let ni = (n as f64) * i;
     let kappa = 1.0 / mu_r;
 
     (2.0 * MU0 * ni) / (r.powi(2) * (1.0 + kappa))
 }
 
+/// Translates optimized gradients into the required coil current (Amps)
+/// Accounts for material properties like relative permeability (mu_r).
+pub fn calculate_required_current(g: f64, n_turns: usize, bore_radius_m: f64, mu_r: f64) -> f64 {
+    let kappa = 1.0 / mu_r;
+    // Derived from g = (2 * MU0 * N * I) / (r^2 * (1 + kappa))
+    (g * bore_radius_m.powi(2) * (1.0 + kappa)) / (2.0 * MU0 * n_turns as f64)
+}
+
 /// Calculates the quadrupole transfer matrix
-fn quad_transfer_matrix(
+pub fn quad_transfer_matrix(
     g: f64,     // Field gradient
     L: f64,     // Effective length
     B_rho: f64, // The beam rigidity
@@ -130,8 +140,8 @@ impl Tracker {
     /// Returns a Tracker data structure with z positions, x/y envelopes, region boundaries, crossovers, etc.
     pub fn new(
         beam: &Beam,
-        g1: f64,      // The first field gradient
-        g2: f64,      // The second field gradient
+        g1: f64, // The first field gradient
+        g2: f64, // The second field gradient
         n_steps: usize,
     ) -> Result<Tracker> {
         let L_mag_m: f64 = beam.L_mag_m;
@@ -258,15 +268,25 @@ impl Tracker {
     }
 
     fn get_residuals(g1: f64, g2: f64, beam: &Beam) -> Array1<f64> {
-        let t = Self::new(
-            beam,
-            g1,
-            g2,
-            50,
-        )
-        .unwrap();
+        let t = Self::new(beam, g1, g2, 50).unwrap();
         // residual 0: asymmetry
         // residual 1: total size
         array![t.x_f - t.y_f, t.x_f + t.y_f]
+    }
+
+    /// Exports the optimized profile as a CSV for IBSimu import.
+    pub fn export_to_ibsimu(&self, filename: &str) -> Result<()> {
+        let mut file = File::create(filename)?;
+        writeln!(file, "z,x_env,y_env")?;
+        for i in 0..self.z.len() {
+            writeln!(
+                file,
+                "{},{},{}",
+                self.z[i],
+                self.x[i].abs(),
+                self.y[i].abs()
+            )?;
+        }
+        Ok(())
     }
 }
