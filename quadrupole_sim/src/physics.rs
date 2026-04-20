@@ -281,7 +281,7 @@ impl Tracker {
 
     /// Exports the optimized profile as a CSV for IBSimu import.
     pub fn export_to_ibsimu(beam: &Beam) -> Result<()> {
-        let mut file = File::create("../IBSimu.csv")?;
+        let mut file = File::create("../beam_tracing.csv")?;
         let (g1, g2) = Self::optimize_nr(beam).unwrap();
 
         let final_tracker = Tracker::new(beam, g1, g2, 500)?;
