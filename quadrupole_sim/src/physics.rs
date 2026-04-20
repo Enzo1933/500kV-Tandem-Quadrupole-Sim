@@ -29,7 +29,7 @@ fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64) -> f64 {
 }
 
 /// Calculates the quadrupole transfer matrix
-pub fn quad_transfer_matrix(
+fn quad_transfer_matrix(
     g: f64,     // Field gradient
     L: f64,     // Effective length
     B_rho: f64, // The beam rigidity
