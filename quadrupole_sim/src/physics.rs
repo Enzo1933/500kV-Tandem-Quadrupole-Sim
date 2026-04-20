@@ -3,6 +3,7 @@ use std::f64::EPSILON;
 
 use anyhow::{Ok, Result};
 use ndarray::{Array1, Array2, array};
+use nalgebra::*; 
 use std::fs::File;
 use std::io::Write;
 
