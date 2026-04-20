@@ -91,7 +91,7 @@ pub struct Beam {
     L_mag_m: f64, // Magnet length
     gap_m: f64,   // Inter-magnet gap (gap between quad-poles)
     drift_m: f64, // Drift to the target
-    energy_MeV: f64,
+    energy_MeV: f64, // Kinetic energy
     x0: f64,  // x
     xp0: f64, // x prime
 }
