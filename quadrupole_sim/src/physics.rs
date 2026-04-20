@@ -20,7 +20,7 @@ pub fn beam_rigidity(ke_mev: f64) -> f64 {
 
 /// Calculates the field gradient
 /// Dimensions: T/m
-/// Parameters: i [current], n [turns], r [radius]
+/// Parameters: i [current], n [turns], r [bore radius]
 fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64) -> f64 {
     let ni = (n as f64) * i;
     let kappa = 1.0 / mu_r;
@@ -300,13 +300,13 @@ impl Tracker {
     }
 
     /// Generates a CSV lookup table for FEMM import
-    pub fn export_femm_lookup(beam: &Beam, n_turns: usize, mu_r: f64, r: f64) -> Result<()> {
+    pub fn export_femm_lookup(beam: &Beam, n_turns: usize, mu_r: f64, bore: f64) -> Result<()> {
         let (g1, g2) = Self::optimize_nr(beam).unwrap();
 
         let final_tracker = Tracker::new(beam, g1, g2, 500)?;
 
-        let i1 = Self::calculate_required_current(g1, n_turns, r, mu_r);
-        let i2 = Self::calculate_required_current(g2, n_turns, r, mu_r);
+        let i1 = Self::calculate_required_current(g1, n_turns, bore, mu_r);
+        let i2 = Self::calculate_required_current(g2, n_turns, bore, mu_r);
         let mut file = File::create("../FEMM-Lookup.csv")?;
 
         writeln!(
@@ -314,7 +314,7 @@ impl Tracker {
             "Magnet,Gradient(T/m),Current(A),Turns,Mu_r,Bore Radius(m)\n\
              Outer_Quads,{},{},{},{},{}\n\
              Inner_Quad,{},{},{},{},{}",
-            g1, i1, n_turns, mu_r, r, g2, i2, n_turns, mu_r, r
+            g1, i1, n_turns, mu_r, bore, g2, i2, n_turns, mu_r, bore
         );
 
         Ok(())
