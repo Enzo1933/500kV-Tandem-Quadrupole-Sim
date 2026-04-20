@@ -27,7 +27,7 @@ fn main() -> std::io::Result<()> {
     // xp0: f64
 
     println!(
-        "Please input the entire geometry and material properties with spaces in between each new criteria
+        "Please input the entire geometry, currents, and material properties with spaces in between each new criteria
 
                 L_mag_m: f64
                 gap_m: f64
@@ -38,6 +38,8 @@ fn main() -> std::io::Result<()> {
                 n_turns: usize
                 mu_r: f64
                 bore: f64
+                i1: f64
+                i2: f64
     "
     );
     println!("Enter here: ");
@@ -57,12 +59,14 @@ fn main() -> std::io::Result<()> {
     let xp0: f64 = split[5] * IN_TO_M;
     
     let energy_MeV: f64 = split[3];
-    let n_turns = split[6];
+    let n_turns = split[6] as usize;
     let mu_r = split[7];
+    let i1 = split[9];
+    let i2 = split[10];
 
     let beam = Beam::new(L_mag_m, gap_m, drift_m, energy_MeV, x0, xp0);
-    let export_femm = Tracker::export_femm_lookup(&beam, n_turns as usize, mu_r, r);
-    let export_ibsimu = Tracker::export_to_ibsimu(&beam);
+    let export_femm = Tracker::export_femm_lookup(&beam, i1, i2, n_turns, mu_r, r);
+    let export_ibsimu = Tracker::export_to_ibsimu(&beam, i1, i2, n_turns, mu_r, r);
 
     Ok(())
 }

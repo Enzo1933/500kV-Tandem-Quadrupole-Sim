@@ -148,12 +148,12 @@ impl Tracker {
         let total_length = (3.0 * L_mag_m) + gap_m + (2.0 * drift_m);
 
         let regions = [
-            ("quad", g1, L_mag_m),
-            ("drift", 0.0, gap_m),
-            ("quad", -g2, L_mag_m),
-            ("drift", 0.0, drift_m),
-            ("quad", -g1, L_mag_m),
-            ("drift", 0.0, drift_m),
+            ("quad", g1, L_mag_m),   // Q1
+            ("drift", 0.0, gap_m),   // Gap 1
+            ("quad", -g2, L_mag_m),  // Q2
+            ("drift", 0.0, gap_m),   // Gap 2 (Was drift_m)
+            ("quad", g1, L_mag_m),   // Q3 (Usually matches Q1)
+            ("drift", 0.0, drift_m), // Final Drift to target
         ];
 
         let mut x = vec![x0];
@@ -217,34 +217,24 @@ impl Tracker {
     }
 
     /// Optimization using Newton-Raphson
-    fn optimize_nr(args: &Beam) -> Option<(f64, f64)> {
-        let g1 = field_gradient(5.0, 150, 0.025, 2000.0);
-        let g2 = field_gradient(15.0, 150, 0.025, 2000.0);
-
-        let mut g = array![g1, g2]; // [g1, g2]
-        let eps = 1e-6; // Finite difference step
-        let learning_rate = 0.30; // Damping to prevent overshooting
+    fn optimize_nr(args: &Beam, i1_start: f64, i2_start: f64, n: usize, mu_r: f64, r: f64) -> Option<(f64, f64)> {
+        let mut i = array![i1_start, i2_start]; 
+        let eps = 1e-6; // Finite difference step in Amps instead
+        let learning_rate = 0.50; 
 
         for _ in 0..50 {
-            // 1. Calculate current errors (Residuals)
-            let res = Self::get_residuals(g[0], g[1], args);
+            let res = Self::get_residuals_current(i[0], i[1], n, mu_r, r, args);
 
-            // 2. Compute Jacobian Matrix (Numerical Derivates)
-            // J_ij = d(residual_i) / d(gradient_j)
-            let res_g1 = Self::get_residuals(g[0] + eps, g[1], args);
-            let res_g2 = Self::get_residuals(g[0], g[1] + eps, args);
+            let res_i1 = Self::get_residuals_current(i[0] + eps, i[1], n, mu_r, r, args);
+            let res_i2 = Self::get_residuals_current(i[0], i[1] + eps, n, mu_r, r, args);
 
             let jacobian = array![
-                [(res_g1[0] - res[0]) / eps, (res_g2[0] - res[0]) / eps],
-                [(res_g1[1] - res[1]) / eps, (res_g2[1] - res[1]) / eps]
+                [(res_i1[0] - res[0]) / eps, (res_i2[0] - res[0]) / eps],
+                [(res_i1[1] - res[1]) / eps, (res_i2[1] - res[1]) / eps]
             ];
 
-            // 3. Solve J * delta = -res  => delta = J^-1 * -res
-            // For a 2x2, we can just do the direct inversion math
             let det = jacobian[[0, 0]] * jacobian[[1, 1]] - jacobian[[0, 1]] * jacobian[[1, 0]];
-            if det.abs() < 1e-12 {
-                break;
-            }
+            if det.abs() < 1e-12 { break; }
 
             let inv_j = array![
                 [jacobian[[1, 1]] / det, -jacobian[[0, 1]] / det],
@@ -252,23 +242,25 @@ impl Tracker {
             ];
 
             let delta = &inv_j.dot(&(-1.0 * res));
-
-            // 4. Update gradients
-            g += &(delta * learning_rate);
+            i += &(delta * learning_rate);
 
             if delta.dot(delta).sqrt() < 1e-5 {
-                return Some((g[0], g[1]));
+                return Some((
+                    field_gradient(i[0], n, r, mu_r),
+                    field_gradient(i[1], n, r, mu_r)
+                ));
             }
         }
-
-        Some((g[0], g[1]))
+        Some((field_gradient(i[0], n, r, mu_r), field_gradient(i[1], n, r, mu_r)))
     }
 
-    fn get_residuals(g1: f64, g2: f64, beam: &Beam) -> Array1<f64> {
+    fn get_residuals_current(i1: f64, i2: f64, n: usize, mu_r: f64, r: f64, beam: &Beam) -> Array1<f64> {
+        let g1 = field_gradient(i1, n, r, mu_r); 
+        let g2 = field_gradient(i2, n, r, mu_r);
+        
         let t = Self::new(beam, g1, g2, 50).unwrap();
-        // residual 0: asymmetry
-        // residual 1: total size
-        array![t.x_f - t.y_f, (t.x_f - beam.x0)]
+        
+        array![t.x_f - t.y_f, t.x_f] 
     }
 
     /// Translates optimized gradients into the required coil current (Amps)
@@ -280,9 +272,11 @@ impl Tracker {
     }
 
     /// Exports the optimized profile as a CSV for IBSimu import.
-    pub fn export_to_ibsimu(beam: &Beam) -> Result<()> {
+    pub fn export_to_ibsimu(beam: &Beam, i1: f64, i2: f64, n_turns: usize, mu_r: f64, r: f64) -> Result<()> {
         let mut file = File::create("../beam_tracing.csv")?;
-        let (g1, g2) = Self::optimize_nr(beam).unwrap();
+        
+        let g1 = field_gradient(i1, n_turns, r, mu_r);
+        let g2 = field_gradient(i2, n_turns, r, mu_r);
 
         let final_tracker = Tracker::new(beam, g1, g2, 500)?;
 
@@ -300,13 +294,10 @@ impl Tracker {
     }
 
     /// Generates a CSV lookup table for FEMM import
-    pub fn export_femm_lookup(beam: &Beam, n_turns: usize, mu_r: f64, bore: f64) -> Result<()> {
-        let (g1, g2) = Self::optimize_nr(beam).unwrap();
+    pub fn export_femm_lookup(beam: &Beam, i1: f64, i2: f64, n_turns: usize, mu_r: f64, bore: f64) -> Result<()> {
+        let g1 = field_gradient(i1, n_turns, bore, mu_r);
+        let g2 = field_gradient(i2, n_turns, bore, mu_r);
 
-        let final_tracker = Tracker::new(beam, g1, g2, 500)?;
-
-        let i1 = Self::calculate_required_current(g1, n_turns, bore, mu_r);
-        let i2 = Self::calculate_required_current(g2, n_turns, bore, mu_r);
         let mut file = File::create("../FEMM-Lookup.csv")?;
 
         writeln!(
@@ -315,7 +306,7 @@ impl Tracker {
              Outer_Quads,{},{},{},{},{}\n\
              Inner_Quad,{},{},{},{},{}",
             g1, i1, n_turns, mu_r, bore, g2, i2, n_turns, mu_r, bore
-        );
+        )?;
 
         Ok(())
     }
