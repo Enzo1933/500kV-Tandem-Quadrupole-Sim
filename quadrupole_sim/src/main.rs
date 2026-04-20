@@ -49,18 +49,18 @@ fn main() -> std::io::Result<()> {
         .map(|x| x.parse::<f64>().unwrap())
         .collect::<Vec<f64>>();
 
-    let L_mag_m: f64 = split[0] as f64;
-    let gap_m: f64 = split[1] as f64;
-    let drift_m: f64 = split[2] as f64;
-    let energy_MeV: f64 = split[3] as f64;
-    let x0: f64 = split[4] as f64;
-    let xp0: f64 = split[5] as f64;
-    let n_turns = split[6] as usize;
-    let mu_r = split[7] as f64;
-    let r = split[8] as f64;
+    let L_mag_m: f64 = split[0];
+    let gap_m: f64 = split[1];
+    let drift_m: f64 = split[2];
+    let energy_MeV: f64 = split[3];
+    let x0: f64 = split[4];
+    let xp0: f64 = split[5];
+    let n_turns = split[6];
+    let mu_r = split[7];
+    let r = split[8];
 
     let beam = Beam::new(L_mag_m, gap_m, drift_m, energy_MeV, x0, xp0);
-    let export_femm = Tracker::export_femm_lookup(&beam, n_turns, mu_r, r);
+    let export_femm = Tracker::export_femm_lookup(&beam, n_turns as usize, mu_r, r);
     let export_ibsimu = Tracker::export_to_ibsimu(&beam);
 
     Ok(())
