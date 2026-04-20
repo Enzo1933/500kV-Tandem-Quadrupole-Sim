@@ -52,12 +52,13 @@ fn main() -> std::io::Result<()> {
     let L_mag_m: f64 = split[0] * IN_TO_M;
     let gap_m: f64 = split[1] * IN_TO_M;
     let drift_m: f64 = split[2] * IN_TO_M;
-    let energy_MeV: f64 = split[3];
+    let r = split[8] * IN_TO_M;
     let x0: f64 = split[4] * IN_TO_M;
     let xp0: f64 = split[5] * IN_TO_M;
+    
+    let energy_MeV: f64 = split[3];
     let n_turns = split[6];
     let mu_r = split[7];
-    let r = split[8] * IN_TO_M;
 
     let beam = Beam::new(L_mag_m, gap_m, drift_m, energy_MeV, x0, xp0);
     let export_femm = Tracker::export_femm_lookup(&beam, n_turns as usize, mu_r, r);
