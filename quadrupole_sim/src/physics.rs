@@ -166,37 +166,32 @@ impl Tracker {
         let mut y = vec![x0];
         let mut z = vec![0.0];
 
-        let eps = 1e-8;
-        let mut sigma_x = array![
-            [x0*x0 + eps, 0.0],
-            [0.0, xp0*xp0 + eps]
-        ];
+        let mut x_state: Array1<f64> = array![x0, xp0];
+        let mut y_state: Array1<f64> = array![x0, xp0];
         
-        let mut sigma_y = sigma_x.clone();
-
         for (r, g, length) in regions {
             let n = usize::max((n_steps as f64 * length / total_length) as usize, 4);
             let dz = length / n as f64;
-
-            let (Mx, My) = match r {
-                "quad" => quad_transfer_matrix(g, dz, Brho),
-                _ => (drift_matrix(dz), drift_matrix(dz)),
-            };
-
+        
             for _ in 0..n {
-                sigma_x = 0.5 * (&sigma_x + &sigma_x.t());
-                sigma_y = 0.5 * (&sigma_y + &sigma_y.t());
-
+                let (Mx, My) = match r {
+                    "quad" => quad_transfer_matrix(g, dz, Brho),
+                    _ => (drift_matrix(dz), drift_matrix(dz)),
+                };
+        
+                x_state = Mx.dot(&x_state);
+                y_state = My.dot(&y_state);
+        
                 z.push(z.last().unwrap() + dz);
-                x.push(sigma_x[[0,0]].sqrt());
-                y.push(sigma_y[[0,0]].sqrt());
+                x.push(x_state[0]);
+                y.push(y_state[0]);
             }
         }
+        
+        let x_f = x_state[0].abs();
+        let y_f = y_state[0].abs();
         let x_mean = x.iter().sum::<f64>() / x.len() as f64;
         let y_mean = y.iter().sum::<f64>() / y.len() as f64;
-
-        let x_f = sigma_x[[0,0]].sqrt();
-        let y_f = sigma_y[[0,0]].sqrt();
 
         let max_env_x = x.iter().map(|v| v.abs()).fold(f64::NEG_INFINITY, f64::max);
         let max_env_y = y.iter().map(|v| v.abs()).fold(f64::NEG_INFINITY, f64::max);
