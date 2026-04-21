@@ -294,8 +294,8 @@ impl Tracker {
         (g * bore_radius_m.powi(2) * (1.0 + kappa)) / (2.0 * MU0 * n_turns as f64)
     }
 
-    /// Exports the optimized profile as a CSV for IBSimu import and for FEMM
-    pub fn export(
+    /// Exports the optimized profile as a CSV for IBSimu import.
+    pub fn export_to_ibsimu(
         beam: &Beam,
         n1: usize,
         n2: usize,
@@ -304,8 +304,10 @@ impl Tracker {
         sat: f64,
     ) -> Result<()> {
         let mut file = File::create("../beam_tracing.csv")?;
-        let (g1, g2) = Self::optimize_nr(beam, n1, n2, r, mu_r, sat).unwrap();
+        let (i1, i2) = Self::optimize_nr(beam, n1, n2, r, mu_r, sat).unwrap();
 
+        let g1 = field_gradient(i1, n1, r, mu_r, sat);
+        let g2 = field_gradient(i2, n2, r, mu_r, sat);
         let final_tracker = Tracker::new(beam, g1, g2, 500)?;
 
         writeln!(file, "z,x_env,y_env")?;
@@ -318,9 +320,23 @@ impl Tracker {
                 final_tracker.y[i].abs()
             )?;
         }
+        Ok(())
+    }
 
-        let i1 = Self::calculate_required_current(g1, n1, r, mu_r);
-        let i2 = Self::calculate_required_current(g2, n2, r, mu_r);
+    /// Generates a CSV lookup table for FEMM import
+    pub fn export_femm_lookup(
+        beam: &Beam,
+        n1: usize,
+        n2: usize,
+        r: f64,
+        mu_r: f64,
+        sat: f64,
+    ) -> Result<()> {
+        let (i1, i2) = Self::optimize_nr(beam, n1, n2, r, mu_r, sat).unwrap();
+
+        let g1 = field_gradient(i1, n1, r, mu_r, sat);
+        let g2 = field_gradient(i2, n2, r, mu_r, sat);
+        let final_tracker = Tracker::new(beam, g1, g2, 500)?;
         let mut file = File::create("../FEMM-Lookup.csv")?;
 
         writeln!(
