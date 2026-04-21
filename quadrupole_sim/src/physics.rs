@@ -166,8 +166,12 @@ impl Tracker {
         let mut y = vec![x0];
         let mut z = vec![0.0];
 
-        let mut x_state: Array1<f64> = array![x0, xp0];
-        let mut y_state: Array1<f64> = array![x0, xp0];
+        let mut sigma_x = array![
+            [x0*x0, x0*xp0],
+            [x0*xp0, xp0*xp0]
+        ];
+        
+        let mut sigma_y = sigma_x.clone();
 
         for (r, g, length) in regions {
             let n = usize::max((n_steps as f64 * length / total_length) as usize, 4);
@@ -179,17 +183,17 @@ impl Tracker {
             };
 
             for _ in 0..n {
-                x_state = Mx.dot(&x_state);
-                y_state = My.dot(&y_state);
+                sigma_x = Mx.dot(&sigma_x).dot(&Mx.t());
+                sigma_y = My.dot(&sigma_y).dot(&My.t());
 
                 z.push(z.last().unwrap() + dz);
-                x.push(x_state[0]);
-                y.push(y_state[0]);
+                x.push(sigma_x[[0,0]].sqrt());
+                y.push(sigma_y[[0,0]].sqrt());
             }
         }
 
-        let x_f = x_state[0].abs();
-        let y_f = y_state[0].abs();
+        let x_f = sigma_x[[0,0]].sqrt();
+        let y_f = sigma_y[[0,0]].sqrt();
 
         let max_env_x = x.iter().map(|v| v.abs()).fold(f64::NEG_INFINITY, f64::max);
         let max_env_y = y.iter().map(|v| v.abs()).fold(f64::NEG_INFINITY, f64::max);
