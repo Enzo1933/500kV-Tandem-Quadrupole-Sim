@@ -35,11 +35,11 @@ fn main() -> std::io::Result<()> {
                 energy_MeV: f64
                 x0: f64
                 xp0: f64
-                n_turns: usize
+                n1: usize
+                n2: usize
                 mu_r: f64
                 bore: f64
-                i1: f64
-                i2: f64
+                sat: f64
     "
     );
     println!("Enter here: ");
@@ -54,19 +54,17 @@ fn main() -> std::io::Result<()> {
     let L_mag_m: f64 = split[0] * IN_TO_M;
     let gap_m: f64 = split[1] * IN_TO_M;
     let drift_m: f64 = split[2] * IN_TO_M;
-    let r = split[8] * IN_TO_M;
+    let energy_MeV: f64 = split[3];
     let x0: f64 = split[4] * IN_TO_M;
     let xp0: f64 = split[5] * IN_TO_M;
-    
-    let energy_MeV: f64 = split[3];
-    let n_turns = split[6] as usize;
-    let mu_r = split[7];
-    let i1 = split[9];
-    let i2 = split[10];
+    let n1 = split[6] as usize;
+    let n2 = split[7] as usize;
+    let mu_r = split[8];
+    let r = split[9] * IN_TO_M;
+    let sat = split[10];
 
     let beam = Beam::new(L_mag_m, gap_m, drift_m, energy_MeV, x0, xp0);
-    let export_femm = Tracker::export_femm_lookup(&beam, i1, i2, n_turns, mu_r, r);
-    let export_ibsimu = Tracker::export_to_ibsimu(&beam, i1, i2, n_turns, mu_r, r);
+    let export_femm = Tracker::export(&beam, n1, n2, r, mu_r, sat);
 
     Ok(())
 }

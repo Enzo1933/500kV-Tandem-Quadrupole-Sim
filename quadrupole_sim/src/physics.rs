@@ -20,10 +20,17 @@ pub fn beam_rigidity(ke_mev: f64) -> f64 {
 
 /// Calculates the field gradient
 /// Dimensions: T/m
-/// Parameters: i [current], n [turns], r [bore radius]
-fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64) -> f64 {
+/// Parameters: i [current], n [turns], r [radius], mu_r [the relative permeability], sat [the saturation]
+fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64, sat: f64) -> f64 {
     let ni = (n as f64) * i;
-    let kappa = 1.0 / mu_r;
+
+    // Calculate pole-tip B-field to check for saturation
+    let b_pole = (MU0 * ni) / r;
+    let b_sat = 1.6; // Saturation point of iron in Tesla
+
+    // Effective permeability drops as we saturate
+    let mu_eff = mu_r / (1.0 + (b_pole / b_sat).powi(4));
+    let kappa = 1.0 / mu_eff;
 
     (2.0 * MU0 * ni) / (r.powi(2) * (1.0 + kappa))
 }
@@ -152,7 +159,7 @@ impl Tracker {
             ("drift", 0.0, gap_m),   // Gap 1
             ("quad", -g2, L_mag_m),  // Q2
             ("drift", 0.0, gap_m),   // Gap 2 (Was drift_m)
-            ("quad", g1, L_mag_m),   // Q3 (Usually matches Q1)
+            ("quad", g1, L_mag_m),   // Q3 (Must match Q1 polarity)
             ("drift", 0.0, drift_m), // Final Drift to target
         ];
 
@@ -217,16 +224,16 @@ impl Tracker {
     }
 
     /// Optimization using Newton-Raphson
-    fn optimize_nr(args: &Beam, i1_start: f64, i2_start: f64, n: usize, mu_r: f64, r: f64) -> Option<(f64, f64)> {
-        let mut i = array![i1_start, i2_start]; 
-        let eps = 1e-6; // Finite difference step in Amps instead
-        let learning_rate = 0.50; 
+    fn optimize_nr(args: &Beam, n1: usize, n2: usize, r: f64, mu_r: f64, sat: f64) -> Option<(f64, f64)> {
+        let mut i = array![10.0, 15.0]; 
+        let eps = 1e-3; // Step size in Amps
+        let learning_rate = 0.50;
 
-        for _ in 0..50 {
-            let res = Self::get_residuals_current(i[0], i[1], n, mu_r, r, args);
+        for _ in 0..100 {
+            let res = Self::get_residuals_from_current(i[0], i[1], n1, n2, r, mu_r, sat, args);
 
-            let res_i1 = Self::get_residuals_current(i[0] + eps, i[1], n, mu_r, r, args);
-            let res_i2 = Self::get_residuals_current(i[0], i[1] + eps, n, mu_r, r, args);
+            let res_i1 = Self::get_residuals_from_current(i[0] + eps, i[1], n1, n2, r, mu_r, sat, args);
+            let res_i2 = Self::get_residuals_from_current(i[0], i[1] + eps, n1, n2, r, mu_r, sat, args);
 
             let jacobian = array![
                 [(res_i1[0] - res[0]) / eps, (res_i2[0] - res[0]) / eps],
@@ -234,7 +241,9 @@ impl Tracker {
             ];
 
             let det = jacobian[[0, 0]] * jacobian[[1, 1]] - jacobian[[0, 1]] * jacobian[[1, 0]];
-            if det.abs() < 1e-12 { break; }
+            if det.abs() < 1e-14 {
+                break;
+            }
 
             let inv_j = array![
                 [jacobian[[1, 1]] / det, -jacobian[[0, 1]] / det],
@@ -244,23 +253,37 @@ impl Tracker {
             let delta = &inv_j.dot(&(-1.0 * res));
             i += &(delta * learning_rate);
 
-            if delta.dot(delta).sqrt() < 1e-5 {
-                return Some((
-                    field_gradient(i[0], n, r, mu_r),
-                    field_gradient(i[1], n, r, mu_r)
-                ));
+            if delta.dot(delta).sqrt() < 1e-6 {
+                return Some((i[0], i[1]));
             }
         }
-        Some((field_gradient(i[0], n, r, mu_r), field_gradient(i[1], n, r, mu_r)))
+        Some((i[0], i[1]))
     }
 
-    fn get_residuals_current(i1: f64, i2: f64, n: usize, mu_r: f64, r: f64, beam: &Beam) -> Array1<f64> {
-        let g1 = field_gradient(i1, n, r, mu_r); 
-        let g2 = field_gradient(i2, n, r, mu_r);
-        
+    fn get_residuals(g1: f64, g2: f64, beam: &Beam) -> Array1<f64> {
         let t = Self::new(beam, g1, g2, 50).unwrap();
-        
-        array![t.x_f - t.y_f, t.x_f] 
+        // residual 0: asymmetry
+        // residual 1: total size
+        array![t.x_f - t.y_f, (t.x_f - beam.x0)]
+    }
+
+    fn get_residuals_from_current(
+        i1: f64,
+        i2: f64,
+        n1: usize,
+        n2: usize,
+        r: f64,
+        mu_r: f64,
+        sat: f64,
+        beam: &Beam,
+    ) -> Array1<f64> {
+        let g1 = field_gradient(i1, n1, r, mu_r, sat);
+        let g2 = field_gradient(i2, n2, r, mu_r, sat);
+
+        let t = Self::new(beam, g1, g2, 50).unwrap();
+
+        // Target: Symmetry and a focal point (x_f -> 0)
+        array![t.x_f - t.y_f, t.x_f]
     }
 
     /// Translates optimized gradients into the required coil current (Amps)
@@ -271,12 +294,17 @@ impl Tracker {
         (g * bore_radius_m.powi(2) * (1.0 + kappa)) / (2.0 * MU0 * n_turns as f64)
     }
 
-    /// Exports the optimized profile as a CSV for IBSimu import.
-    pub fn export_to_ibsimu(beam: &Beam, i1: f64, i2: f64, n_turns: usize, mu_r: f64, r: f64) -> Result<()> {
+    /// Exports the optimized profile as a CSV for IBSimu import and for FEMM
+    pub fn export(
+        beam: &Beam,
+        n1: usize,
+        n2: usize,
+        r: f64,
+        mu_r: f64,
+        sat: f64,
+    ) -> Result<()> {
         let mut file = File::create("../beam_tracing.csv")?;
-        
-        let g1 = field_gradient(i1, n_turns, r, mu_r);
-        let g2 = field_gradient(i2, n_turns, r, mu_r);
+        let (g1, g2) = Self::optimize_nr(beam, n1, n2, r, mu_r, sat).unwrap();
 
         let final_tracker = Tracker::new(beam, g1, g2, 500)?;
 
@@ -290,23 +318,18 @@ impl Tracker {
                 final_tracker.y[i].abs()
             )?;
         }
-        Ok(())
-    }
 
-    /// Generates a CSV lookup table for FEMM import
-    pub fn export_femm_lookup(beam: &Beam, i1: f64, i2: f64, n_turns: usize, mu_r: f64, bore: f64) -> Result<()> {
-        let g1 = field_gradient(i1, n_turns, bore, mu_r);
-        let g2 = field_gradient(i2, n_turns, bore, mu_r);
-
+        let i1 = Self::calculate_required_current(g1, n1, r, mu_r);
+        let i2 = Self::calculate_required_current(g2, n2, r, mu_r);
         let mut file = File::create("../FEMM-Lookup.csv")?;
 
         writeln!(
             file,
-            "Magnet,Gradient(T/m),Current(A),Turns,Mu_r,Bore Radius(m)\n\
+            "Magnet,Gradient(T/m),Current(A),Turns,Mu_r,Radius(m)\n\
              Outer_Quads,{},{},{},{},{}\n\
              Inner_Quad,{},{},{},{},{}",
-            g1, i1, n_turns, mu_r, bore, g2, i2, n_turns, mu_r, bore
-        )?;
+            g1, i1, n1, mu_r, r, g2, i2, n2, mu_r, r
+        );
 
         Ok(())
     }
