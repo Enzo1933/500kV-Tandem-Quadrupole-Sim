@@ -25,8 +25,8 @@ fn solve_b_pole(i: f64, n: usize, r: f64, mu_r: f64, sat: f64) -> f64 {
 
     for _ in 0..250 {
         let mu = effective_permeability(mu_r, sat, b);
-        b = (MU0 * mu * ni) / r;
-        b = b * (1.0-0.3) + 0.3*b
+        let b2 = (MU0 * mu * ni) / r;
+        b = b * (1.0-0.3) + 0.3*b2
     }
 
     b
@@ -346,7 +346,7 @@ impl Tracker {
         let b_pole1 = MU0 * (n1 as f64) * i1;
         let mu_eff1 = mu_r / (1.0 + (b_pole1 / sat).powi(4));
 
-        let b_pole2 = MU0 * (n2 as f64) * i1;
+        let b_pole2 = MU0 * (n2 as f64) * i2;
         let mu_eff2 = mu_r / (1.0 + (b_pole2 / sat).powi(4));
 
         writeln!(
