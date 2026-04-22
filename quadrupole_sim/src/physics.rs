@@ -253,7 +253,7 @@ impl Tracker {
         mu_r: f64,
         sat: f64,
     ) -> Option<(f64, f64)> {
-        let mut i = array![10.0, 10.0];
+        let mut i = array![20.0, 20.0];
         let eps = 1e-3; // Step size in Amps
         let learning_rate = 0.50;
 
