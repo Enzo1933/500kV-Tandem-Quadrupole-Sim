@@ -25,7 +25,7 @@ fn solve_b_pole(i: f64, n: usize, r: f64, mu_r: f64, sat: f64) -> f64 {
 
     for _ in 0..250 {
         let mu = effective_permeability(mu_r, sat, b);
-        let b2 = (MU0 * mu * ni) / r;
+        let b2 = (mu * ni) / r;
         b = b * (1.0-0.3) + 0.3*b2
     }
 
