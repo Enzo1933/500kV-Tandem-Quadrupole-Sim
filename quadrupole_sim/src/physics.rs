@@ -1,5 +1,4 @@
-#![allow(non_snake_case)]
-use std::f64::EPSILON;
+#![allow(non_snake_case, unused)]
 
 use anyhow::{Ok, Result};
 use nalgebra::*;
@@ -19,7 +18,7 @@ pub fn beam_rigidity(ke_mev: f64) -> f64 {
 }
 
 /// Solves for the B field of a quadrupole
-fn solve_b_pole(i: f64, n: usize, r: f64, mu_r: f64, sat: f64) -> f64 {
+pub fn solve_b_pole(i: f64, n: usize, r: f64, mu_r: f64, sat: f64) -> f64 {
     let ni = i * (n as f64);
     let mut b = (MU0 * ni) / r; // initial guess
     let epsilon = 1e-6;
@@ -44,7 +43,7 @@ fn solve_b_pole(i: f64, n: usize, r: f64, mu_r: f64, sat: f64) -> f64 {
 /// Calculates the field gradient
 /// Dimensions: T/m
 /// Parameters: i [current], n [turns], r [radius], mu_r [the relative permeability], sat [the saturation]
-fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64, sat: f64) -> f64 {
+pub fn field_gradient(i: f64, n: usize, r: f64, mu_r: f64, sat: f64) -> f64 {
     let b = solve_b_pole(i, n, r, mu_r, sat);
     (2.0 * b) / r
 }
@@ -137,27 +136,27 @@ impl Beam {
 
 /// The envelope tracker struct
 pub struct Tracker {
-    x: Vec<f64>,
-    y: Vec<f64>,
-    z: Vec<f64>,
-    x_f: f64, // final |x| position
-    y_f: f64, // final |y| position
-    total_length: f64,
-    q1_end: f64,
-    q2_start: f64,
-    q2_end: f64,
-    q3_start: f64,
-    q3_end: f64,
-    x_xover: Vec<f64>,
-    y_xover: Vec<f64>,
-    max_env_x: f64,
-    max_env_y: f64,
+    pub x: Vec<f64>,
+    pub y: Vec<f64>,
+    pub z: Vec<f64>,
+    pub x_f: f64, // final |x| position
+    pub y_f: f64, // final |y| position
+    pub total_length: f64,
+    pub q1_end: f64,
+    pub q2_start: f64,
+    pub q2_end: f64,
+    pub q3_start: f64,
+    pub q3_end: f64,
+    pub x_xover: Vec<f64>,
+    pub y_xover: Vec<f64>,
+    pub max_env_x: f64,
+    pub max_env_y: f64,
 }
 
 impl Tracker {
     /// Track beam envelope through FDF triplet.
     /// Returns a Tracker data structure with z positions, x/y envelopes, region boundaries, crossovers, etc.
-    fn new(
+    pub fn new(
         beam: &Beam,
         g1: f64, // The first field gradient
         g2: f64, // The second field gradient
@@ -171,7 +170,7 @@ impl Tracker {
         let xp0 = beam.xp0;
 
         let Brho = beam_rigidity(energy_MeV);
-        let total_length = (3.0 * L_mag_m) + gap_m + (2.0 * drift_m);
+        let total_length = (3.0 * L_mag_m) + (2.0 * gap_m) + drift_m;
 
         let regions = [
             ("quad", g1, L_mag_m),   // Q1
@@ -222,7 +221,7 @@ impl Tracker {
         let q1_end = L_mag_m;
         let q2_start = q1_end + gap_m;
         let q2_end = q2_start + L_mag_m;
-        let q3_start = q2_end + drift_m;
+        let q3_start = q2_end + gap_m;
         let q3_end = q3_start + L_mag_m;
 
         Ok(Tracker {
@@ -245,7 +244,7 @@ impl Tracker {
     }
 
     /// Optimization using Newton-Raphson
-    fn optimize_nr(
+    pub fn optimize_nr(
         args: &Beam,
         n1: usize,
         n2: usize,
@@ -257,7 +256,7 @@ impl Tracker {
         let eps = 1e-3; // Step size in Amps
         let learning_rate = 0.50;
 
-        for _ in 0..5000 {
+        for _ in 0..50 {
             let res = Self::get_residuals_from_current(i[0], i[1], n1, n2, r, mu_r, sat, args);
 
             let res_i1 =
@@ -289,32 +288,6 @@ impl Tracker {
         }
         Some((i[0], i[1]))
     }
-
-    fn get_residuals(g1: f64, g2: f64, beam: &Beam) -> Array1<f64> {
-        let t = Self::new(beam, g1, g2, 50).unwrap();
-        // residual 0: asymmetry
-        // residual 1: total size
-        array![t.x_f - t.y_f, (t.x_f - beam.x0)]
-    }
-
-    // fn get_residuals_from_current(
-    //     i1: f64,
-    //     i2: f64,
-    //     n1: usize,
-    //     n2: usize,
-    //     r: f64,
-    //     mu_r: f64,
-    //     sat: f64,
-    //     beam: &Beam,
-    // ) -> Array1<f64> {
-    //     let g1 = field_gradient(i1, n1, r, mu_r, sat);
-    //     let g2 = field_gradient(i2, n2, r, mu_r, sat);
-
-    //     let t = Self::new(beam, g1, g2, 50).unwrap();
-
-    //     // Target: Symmetry and a focal point (x_f -> 0)
-    //     array![t.x_f - t.y_f, t.x_f]
-    // }
 
     fn get_residuals_from_current(
         i1: f64,
@@ -385,7 +358,6 @@ impl Tracker {
 
         let g1 = field_gradient(i1, n1, r, mu_r, sat);
         let g2 = field_gradient(i2, n2, r, mu_r, sat);
-        let final_tracker = Tracker::new(beam, g1, g2, 500)?;
         let mut file = File::create("../FEMM-Lookup.csv")?;
 
         // In export_femm_lookup
@@ -402,7 +374,7 @@ impl Tracker {
              Outer_Quads,{},{},{},{},{}\n\
              Inner_Quad,{},{},{},{},{}",
             g1, i1, n1, mu_eff1, r, g2, i2, n2, mu_eff2, r
-        );
+        )?;
 
         Ok(())
     }
