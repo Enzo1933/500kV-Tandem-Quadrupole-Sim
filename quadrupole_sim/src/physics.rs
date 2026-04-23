@@ -17,6 +17,7 @@ pub fn beam_rigidity(ke_mev: f64) -> f64 {
 }
 
 /// Solves for the B field of a quadrupole
+/// Solve the ODE: F(B) = l_mat*H(B)+l_gap*(B/mu_0) - NI
 pub fn solve_b_pole(i: f64, n: usize, r: f64, mu_r: f64, sat: f64) -> f64 {
     let ni = i * (n as f64);
     let mut b = (MU0 * ni) / r; // initial guess
@@ -357,11 +358,9 @@ impl Tracker {
         let g2 = field_gradient(i2, n2, r, mu_r, sat);
         let mut file = File::create("../FEMM-Lookup.csv")?;
 
-        // In export_femm_lookup
         let b_pole1 = solve_b_pole(i1, n1, r, mu_r, sat);
         let mu_eff1 = effective_permeability(mu_r, sat, b_pole1);
 
-        // In export_femm_lookup
         let b_pole2 = solve_b_pole(i2, n2, r, mu_r, sat);
         let mu_eff2 = effective_permeability(mu_r, sat, b_pole2);
 
