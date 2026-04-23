@@ -305,37 +305,37 @@ impl eframe::App for QuadApp {
                     .show(ui, |plot_ui| {
 
                         // Quad region shading via vertical lines
-                        let q_color = egui::Color32::from_rgba_unmultiplied(80, 80, 220, 20);
+                        let q_color = egui::Color32::from_rgba_unmultiplied(80, 80, 220, 200);
 
                         plot_ui.line(Line::new(PlotPoints::new(vec![
                             [0.0,              -bore_mm * 1.2],
                             [0.0,               bore_mm * 1.2],
-                        ])).color(egui::Color32::from_rgba_unmultiplied(80,80,220,60)).name("Q1"));
+                        ])).color(q_color).name("Q1"));
 
                         plot_ui.line(Line::new(PlotPoints::new(vec![
                             [t.q1_end * 1000.0,  -bore_mm * 1.2],
                             [t.q1_end * 1000.0,   bore_mm * 1.2],
-                        ])).color(egui::Color32::from_rgba_unmultiplied(80,80,220,60)));
+                        ])).color(q_color));
 
                         plot_ui.line(Line::new(PlotPoints::new(vec![
                             [t.q2_start * 1000.0, -bore_mm * 1.2],
                             [t.q2_start * 1000.0,  bore_mm * 1.2],
-                        ])).color(egui::Color32::from_rgba_unmultiplied(80,80,220,60)).name("Q2"));
+                        ])).color(q_color).name("Q2"));
 
                         plot_ui.line(Line::new(PlotPoints::new(vec![
                             [t.q2_end * 1000.0,  -bore_mm * 1.2],
                             [t.q2_end * 1000.0,   bore_mm * 1.2],
-                        ])).color(egui::Color32::from_rgba_unmultiplied(80,80,220,60)));
+                        ])).color(q_color));
 
                         plot_ui.line(Line::new(PlotPoints::new(vec![
                             [t.q3_start * 1000.0, -bore_mm * 1.2],
                             [t.q3_start * 1000.0,  bore_mm * 1.2],
-                        ])).color(egui::Color32::from_rgba_unmultiplied(80,80,220,60)).name("Q3"));
+                        ])).color(q_color).name("Q3"));
 
                         plot_ui.line(Line::new(PlotPoints::new(vec![
                             [t.q3_end * 1000.0,  -bore_mm * 1.2],
                             [t.q3_end * 1000.0,   bore_mm * 1.2],
-                        ])).color(egui::Color32::from_rgba_unmultiplied(80,80,220,60)));
+                        ])).color(q_color));
 
                         // Bore limits
                         plot_ui.line(Line::new(PlotPoints::new(vec![
