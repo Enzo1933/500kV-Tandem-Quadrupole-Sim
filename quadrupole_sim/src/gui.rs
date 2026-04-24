@@ -1,7 +1,7 @@
 use eframe::egui;
 use egui_plot::{Line, Plot, PlotPoints};
 
-use crate::physics::{Beam, Tracker, beam_rigidity, field_gradient};
+use crate::beam_and_tracker::{Beam, Tracker, beam_rigidity, field_gradient};
 
 // ============================================================
 // App state
@@ -280,8 +280,8 @@ impl eframe::App for QuadApp {
                             r,
                             self.mu_r,
                             self.sat,
-                            r*2.0,
-                            r*5.0,
+                            r * 2.0,
+                            r * 5.0,
                         );
                         self.status = "Exported beam_tracing.csv".into();
                     }
@@ -294,9 +294,8 @@ impl eframe::App for QuadApp {
                             r,
                             self.mu_r,
                             self.sat,
-                            r*2.0,
-                            r*5.0,
-
+                            r * 2.0,
+                            r * 5.0,
                         );
                         self.status = "Exported FEMM-Lookup.csv".into();
                     }
@@ -508,20 +507,8 @@ impl QuadApp {
             beam.gap_m,
         ) {
             Some((i1, i2)) => {
-                let g1 = field_gradient(
-                    i1,
-                    self.n1,
-                    r,
-                    r*2.0,
-                    r*5.0,
-                );
-                let g2 = field_gradient(
-                    i2,
-                    self.n2,
-                    r,
-                    r*2.0,
-                    r*5.0,
-                );
+                let g1 = field_gradient(i1, self.n1, r, r * 2.0, r * 5.0);
+                let g2 = field_gradient(i2, self.n2, r, r * 2.0, r * 5.0);
 
                 match Tracker::new(&beam, g1, g2, 400) {
                     Ok(t) => {

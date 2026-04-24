@@ -5,7 +5,10 @@ use ndarray::{Array1, Array2, array};
 use std::fs::File;
 use std::io::Write;
 
-use crate::{C_TM, MU0, PROTON_MASS};
+use crate::{
+    C_TM, MU0, PROTON_MASS,
+    bh_table::{self, BHCurve},
+};
 
 /// Calculates the beam rigidity (B_rho)
 /// Dimensions: T*m
@@ -16,36 +19,31 @@ pub fn beam_rigidity(ke_mev: f64) -> f64 {
     p / C_TM
 }
 
-pub fn h_and_slope(b: f64) -> (f64, f64) {
-    todo!()
-}
-
 /// Solves for the B field of a quadrupole
 /// Solve the ODE: F(B) = l_iron*H(B)+l_gap*(B/mu_0) - NI
-pub fn solve_b_pole(
-    i: f64,
-    n: usize,
-    l_iron: f64,
-    l_gap: f64,
-) -> f64 {
+pub fn solve_b_pole(i: f64, n: usize, l_iron: f64, l_gap: f64) -> f64 {
     let ni = i * (n as f64); // The mmf we are solving for
     let mut b = (MU0 * ni) / l_gap; // initial guess for b
     let eps = 1e-6;
 
-    loop {
-        let (h, dh_db) = h_and_slope(b);
+    let curve = BHCurve::new(&bh_table::B_VALUES, &bh_table::H_GENERIC_STEEL);
+
+    for i in 0..50 {
+        let (h, dh_db) = curve.h_and_slope(b, i);
 
         let f_b = l_iron * h + l_gap * (b / MU0) - ni;
         let df_db = l_iron * dh_db + l_gap / MU0;
-    
+
         let b_new = b - f_b / df_db;
-        
+
         if f_b.abs() <= eps || (b_new - b).abs() <= eps {
             return b_new;
         }
 
-        b = b_new;   
+        b = b_new;
     }
+
+    b
 }
 
 /// Calculates the field gradient
@@ -59,11 +57,6 @@ pub fn field_gradient(
 ) -> f64 {
     let b = solve_b_pole(i, n, l_iron, l_gap);
     (2.0 * b) / r
-}
-
-/// Calculate Effective Permeability
-fn effective_permeability(mu_r: f64, sat: f64, b_pole: f64) -> f64 {
-    1.0 + (mu_r - 1.0) / (1.0 + (b_pole / sat).powi(4))
 }
 
 /// Calculates the quadrupole transfer matrix
@@ -152,8 +145,8 @@ pub struct Tracker {
     pub x: Vec<f64>,
     pub y: Vec<f64>,
     pub z: Vec<f64>,
-    pub x_f: f64, // final |x| position
-    pub y_f: f64, // final |y| position
+    pub x_f: f64,
+    pub y_f: f64,
     pub total_length: f64,
     pub q1_end: f64,
     pub q2_start: f64,
@@ -169,12 +162,7 @@ pub struct Tracker {
 impl Tracker {
     /// Track beam envelope through FDF triplet.
     /// Returns a Tracker data structure with z positions, x/y envelopes, region boundaries, crossovers, etc.
-    pub fn new(
-        beam: &Beam,
-        g1: f64, // The first field gradient
-        g2: f64, // The second field gradient
-        n_steps: usize,
-    ) -> Result<Tracker> {
+    pub fn new(beam: &Beam, g1: f64, g2: f64, n_steps: usize) -> Result<Tracker> {
         let L_mag_m: f64 = beam.L_mag_m;
         let gap_m: f64 = beam.gap_m;
         let drift_m: f64 = beam.drift_m;
@@ -331,27 +319,18 @@ impl Tracker {
         n1: usize,
         n2: usize,
         r: f64,
-        mu_r: f64,
-        sat: f64,
+        _mu_r: f64,
+        _sat: f64,
         beam: &Beam,
         l_iron: f64,
         l_gap: f64,
     ) -> Array1<f64> {
-        let g1 = field_gradient(i1, n1, r,  l_iron, l_gap);
-        let g2 = field_gradient(i2, n2, r,  l_iron, l_gap);
-
-        // Check if we are saturating (B = G * r / 2)
-        let b_pole2 = (g2 * r) / 2.0;
-        let saturation_penalty = if b_pole2 > 1.8 {
-            (b_pole2 - 1.8) * 1000.0
-        } else {
-            0.0
-        };
+        let g1 = field_gradient(i1, n1, r, l_iron, l_gap);
+        let g2 = field_gradient(i2, n2, r, l_iron, l_gap);
 
         let t = Self::new(beam, g1, g2, 50).unwrap();
 
-        // The optimizer now has to balance focusing with NOT saturating the iron
-        array![t.x_f - t.y_f, t.x_f + saturation_penalty]
+        array![t.x_f - t.y_f, t.x_f]
     }
 
     /// Exports the optimized profile as a CSV for IBSimu import.
@@ -368,8 +347,8 @@ impl Tracker {
         let mut file = File::create("../beam_tracing.csv")?;
         let (i1, i2) = Self::optimize_nr(beam, n1, n2, r, mu_r, sat, l_iron, l_gap).unwrap();
 
-        let g1 = field_gradient(i1, n1, r,  l_iron, l_gap);
-        let g2 = field_gradient(i2, n2, r,  l_iron, l_gap);
+        let g1 = field_gradient(i1, n1, r, l_iron, l_gap);
+        let g2 = field_gradient(i2, n2, r, l_iron, l_gap);
         let final_tracker = Tracker::new(beam, g1, g2, 500)?;
 
         writeln!(file, "z,x_env,y_env")?;
@@ -398,22 +377,16 @@ impl Tracker {
     ) -> Result<()> {
         let (i1, i2) = Self::optimize_nr(beam, n1, n2, r, mu_r, sat, l_iron, l_gap).unwrap();
 
-        let g1 = field_gradient(i1, n1, r,  l_iron, l_gap);
-        let g2 = field_gradient(i2, n2, r,  l_iron, l_gap);
+        let g1 = field_gradient(i1, n1, r, l_iron, l_gap);
+        let g2 = field_gradient(i2, n2, r, l_iron, l_gap);
         let mut file = File::create("../FEMM-Lookup.csv")?;
-
-        let b_pole1 = solve_b_pole(i1, n1,  l_iron, l_gap);
-        let mu_eff1 = effective_permeability(mu_r, sat, b_pole1);
-
-        let b_pole2 = solve_b_pole(i2, n2, l_iron, l_gap);
-        let mu_eff2 = effective_permeability(mu_r, sat, b_pole2);
 
         writeln!(
             file,
-            "Magnet,Gradient(T/m),Current(A),Turns,Mu_eff,Radius(m)\n\
-             Outer_Quads,{},{},{},{},{}\n\
-             Inner_Quad,{},{},{},{},{}",
-            g1, i1, n1, mu_eff1, r, g2, i2, n2, mu_eff2, r
+            "Magnet,Gradient(T/m),Current(A),Turns,Radius(m)\n\
+             Outer_Quads,{},{},{},{}\n\
+             Inner_Quad,{},{},{},{}",
+            g1, i1, n1, r, g2, i2, n2, r
         )?;
 
         Ok(())
