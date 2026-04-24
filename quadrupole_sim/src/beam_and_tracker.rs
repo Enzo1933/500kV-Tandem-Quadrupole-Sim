@@ -177,7 +177,7 @@ impl Tracker {
             ("quad", g1, L_mag_m),   // Q1
             ("drift", 0.0, gap_m),   // Gap 1
             ("quad", -g2, L_mag_m),  // Q2
-            ("drift", 0.0, gap_m),   // Gap 2 (Was drift_m)
+            ("drift", 0.0, gap_m),   // Gap 2 
             ("quad", g1, L_mag_m),   // Q3 (Must match Q1 polarity)
             ("drift", 0.0, drift_m), // Final Drift to target
         ];
