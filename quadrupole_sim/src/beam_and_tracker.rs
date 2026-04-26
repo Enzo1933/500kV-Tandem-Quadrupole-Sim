@@ -201,48 +201,86 @@ impl Tracker {
         })
     }
 
-    /// Optimize magneto-motive force
+    /// Optimize magneto-motive force using gradient descent
     pub fn optimize_mmf(beam: &Beam, geo: &MagnetGeometry) -> Option<(f64, f64)> {
-        let mut mmf1 = 15000.0; // Outer quads
-        let mut mmf2 = 15000.0; // Inner quad
+        let (mut mmf1, mut mmf2) = Self::calculate_realistic_guess(beam, geo);
 
-        let eps = 10.0;
-        let lambda = 0.5; // Damping factor to prevent overshoot
+        // The "Learning Rate" controls how big of a step to take.
+        // The cost function outputs tiny numbers (meters squared),
+        // and MMF is huge (Amp-turns), this needs to be a large multiplier.
+        let mut learning_rate = 5.0e9;
+        let eps = 10.0; // Finite difference nudge
 
-        loop {
-            let (res_asym, res_size) = Tracker::get_residuals_from_mmf(mmf1, mmf2, beam, geo);
+        for i in 0..1000 {
+            // 1. Calculate Base Cost
+            let (base_asym, base_size) = Tracker::get_residuals_from_mmf(mmf1, mmf2, beam, geo);
+            let cost_base = base_asym.powi(2) + base_size.powi(2);
 
             // Convergence Check
-            if res_asym.abs() < 1e-6 && res_size.abs() < 1e-6 {
-                break;
+            if cost_base < 1e-12 {
+                println!("Gradient Descent converged in {} iterations!", i);
+                return Some((mmf1, mmf2));
             }
 
-            let (nudge1_asym, nudge1_size) =
-                Tracker::get_residuals_from_mmf(mmf1 + eps, mmf2, beam, geo);
-            let j11 = (nudge1_asym - res_asym) / eps; // d(Asymmetry) / d(MMF1)
-            let j21 = (nudge1_size - res_size) / eps; // d(Spot Size) / d(MMF1)
+            // Calculate Gradient (Slope) with respect to MMF1
+            let (n1_asym, n1_size) = Tracker::get_residuals_from_mmf(mmf1 + eps, mmf2, beam, geo);
+            let cost_n1 = n1_asym.powi(2) + n1_size.powi(2);
+            let dcost_dmmf1 = (cost_n1 - cost_base) / eps;
 
-            let (nudge2_asym, nudge2_size) =
-                Tracker::get_residuals_from_mmf(mmf1, mmf2 + eps, beam, geo);
-            let j12 = (nudge2_asym - res_asym) / eps; // d(Asymmetry) / d(MMF2)
-            let j22 = (nudge2_size - res_size) / eps; // d(Spot Size) / d(MMF2)
+            // Calculate Gradient (Slope) with respect to MMF2
+            let (n2_asym, n2_size) = Tracker::get_residuals_from_mmf(mmf1, mmf2 + eps, beam, geo);
+            let cost_n2 = n2_asym.powi(2) + n2_size.powi(2);
+            let dcost_dmmf2 = (cost_n2 - cost_base) / eps;
 
-            let det = (j11 * j22) - (j12 * j21);
+            // Take a step DOWNHILL (subtracting the gradient)
+            mmf1 -= learning_rate * dcost_dmmf1;
+            mmf2 -= learning_rate * dcost_dmmf2;
 
-            if det.abs() < 1e-14 {
-                break;
+            // Adaptive Learning Rate (Slow down as you get closer to the bottom)
+            if i % 100 == 0 {
+                println!("Iter {i:3} | MMF1: {mmf1:.1}, MMF2: {mmf2:.1} | Cost: {cost_base:.2e}");
+                learning_rate *= 0.9; // Shrink the step size slightly over time for stability
             }
-
-            // Calculate the raw Newton steps
-            let delta_mmf1 = (j22 * res_asym - j12 * res_size) / det;
-            let delta_mmf2 = (-j21 * res_asym + j11 * res_size) / det;
-
-            // Apply the steps with the damping factor
-            mmf1 -= lambda * delta_mmf1;
-            mmf2 -= lambda * delta_mmf2;
         }
 
+        println!(
+            "Hit max iterations. Final MMF1: {:.1}, MMF2: {:.1}",
+            mmf1, mmf2
+        );
         Some((mmf1, mmf2))
+    }
+
+    /// Generates a physically realistic starting guess for MMF based on optical focal length
+    pub fn calculate_realistic_guess(beam: &Beam, geo: &MagnetGeometry) -> (f64, f64) {
+        // Thin Lens Approximation
+        let required_focal_length = beam.drift_m;
+
+        // Optical strength (k) = 1 / (f * Effective Length)
+        let k_estimate = 1.0 / (required_focal_length * geo.l_mag);
+
+        // k = g / Brho  =>  g = k * Brho
+        let g_estimate = k_estimate * beam_rigidity(1.0); 
+        // g = (2 * B_pole) / r_gap  =>  B_pole = (g * r_gap) / 2
+        let b_pole_estimate = (g_estimate * geo.r_gap) / 2.0;
+
+        // MMF = Flux * Reluctance
+        let (r_gap, r_leak, r_iron) = geo.calculate_reluctances(geo.mu_i);
+        let r_load = (r_gap * r_leak) / (r_gap + r_leak);
+        let r_total = r_load + r_iron;
+
+        let flux_total = b_pole_estimate * geo.a_iron;
+        let base_mmf = flux_total * r_total;
+
+        // Apply the Triplet Ratio Rule (Inner quad is ~1.6x stronger)
+        let mmf1_guess = base_mmf;
+        let mmf2_guess = base_mmf * 1.6;
+
+        println!(
+            "Physics Engine Estimated Starting MMFs: ({:.1}, {:.1})",
+            mmf1_guess, mmf2_guess
+        );
+
+        (mmf1_guess, mmf2_guess)
     }
 
     fn get_residuals_from_mmf(
@@ -253,10 +291,13 @@ impl Tracker {
     ) -> (f64, f64) {
         let g1 = geo.field_gradient(mmf1);
         let g2 = geo.field_gradient(mmf2);
+        let target_spot = 0.00001;
 
         let t = Self::new(beam, geo, g1, g2, 50).unwrap();
-
-        (t.x_f - t.y_f, t.x_f)
+        // residual 0: x/y asymmetry       → drives mmf1/mmf2 ratio
+        // residual 1: average spot size    → drives overall MMF scale
+        let avg = (t.x_f + t.y_f) / 2.0;
+        (t.x_f - t.y_f, avg - target_spot)
     }
 
     /// Exports the optimized profile as a CSV for IBSimu import.
