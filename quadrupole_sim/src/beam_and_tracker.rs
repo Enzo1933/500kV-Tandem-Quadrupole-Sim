@@ -206,16 +206,15 @@ impl Tracker {
         let mut mmf1 = 15000.0; // Outer quads
         let mut mmf2 = 15000.0; // Inner quad
 
-        let mut run = true;
         let eps = 10.0;
         let lambda = 0.5; // Damping factor to prevent overshoot
 
-        while run {
+        loop {
             let (res_asym, res_size) = Tracker::get_residuals_from_mmf(mmf1, mmf2, beam, geo);
 
             // Convergence Check
             if res_asym.abs() < 1e-6 && res_size.abs() < 1e-6 {
-                run = false;
+                break;
             }
 
             let (nudge1_asym, nudge1_size) =
@@ -231,7 +230,7 @@ impl Tracker {
             let det = (j11 * j22) - (j12 * j21);
 
             if det.abs() < 1e-14 {
-                run = false
+                break;
             }
 
             // Calculate the raw Newton steps
