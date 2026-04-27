@@ -3,15 +3,9 @@ name = "quadrupole_sim"
 version = "0.1.0"
 edition = "2024"
 
-[profile.dev]
-opt-level = 3
-
 [dependencies]
 ndarray = "0.17.2"
-montycarlo = "0.1.0"
 anyhow = "1.0.102"
-nalgebra = "0.34.2"
-eframe    = "0.27"
-egui      = "0.27"
+eframe = "0.27"
+egui = "0.27"
 egui_plot = "0.27"
-roots = "0.0.8"
