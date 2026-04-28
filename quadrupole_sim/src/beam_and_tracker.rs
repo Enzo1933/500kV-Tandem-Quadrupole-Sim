@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use anyhow::{Ok, Result};
-use ndarray::{Array1, Array2, array};
+use nalgebra::{Matrix2, matrix, vector};
 use std::fs::File;
 use std::io::Write;
 
@@ -21,7 +21,7 @@ fn quad_transfer_matrix(
     g: f64,     // Field gradient
     L: f64,     // Effective length
     B_rho: f64, // The beam rigidity
-) -> (Array2<f64>, Array2<f64>) {
+) -> (Matrix2<f64>, Matrix2<f64>) {
     let k = g / B_rho; // Focusing strength
     let kr = k.abs().sqrt();
 
@@ -33,34 +33,32 @@ fn quad_transfer_matrix(
 
     if k > 0.0 {
         // Focusing in x, Defocusing in y
-        let M_x = array![
-            [(L * kr).cos(), (L * kr).sin() / kr],
-            [-1.0 * (L * kr).sin() * kr, (L * kr).cos()]
-        ];
-        let M_y = array![
-            [(L * kr).cosh(), (L * kr).sinh() / kr],
-            [(L * kr).sinh() * kr, (L * kr).cosh()]
-        ];
+        let M_x = matrix!
+            [(L * kr).cos(), (L * kr).sin() / kr;
+            -1.0 * (L * kr).sin() * kr, (L * kr).cos()];
+
+        let M_y = matrix!
+            [(L * kr).cosh(), (L * kr).sinh() / kr;
+            (L * kr).sinh() * kr, (L * kr).cosh()];
 
         (M_x, M_y)
     } else {
         // Defocusing in x, Focusing in y
-        let M_x = array![
-            [(L * kr).cosh(), (L * kr).sinh() / kr],
-            [1.0 * (L * kr).sinh() * kr, (L * kr).cosh()]
-        ];
-        let M_y = array![
-            [(L * kr).cos(), (L * kr).sin() / kr],
-            [-1.0 * (L * kr).sin() * kr, (L * kr).cos()]
-        ];
+        let M_y = matrix!
+            [(L * kr).cos(), (L * kr).sin() / kr;
+            -1.0 * (L * kr).sin() * kr, (L * kr).cos()];
+
+        let M_x = matrix!
+            [(L * kr).cosh(), (L * kr).sinh() / kr;
+            (L * kr).sinh() * kr, (L * kr).cosh()];
 
         (M_x, M_y)
     }
 }
 
 /// Returns a drift matrix
-fn drift_matrix(L: f64) -> Array2<f64> {
-    array![[1.0, L], [0.0, 1.0]]
+fn drift_matrix(L: f64) -> Matrix2<f64> {
+    matrix![1.0, L; 0.0, 1.0]
 }
 
 fn find_crossovers(arr: &[f64], z: &[f64]) -> Vec<f64> {
@@ -145,8 +143,8 @@ impl Tracker {
         let mut y = vec![x0];
         let mut z = vec![0.0];
 
-        let mut x_state: Array1<f64> = array![x0, xp0];
-        let mut y_state: Array1<f64> = array![x0, xp0];
+        let mut x_state = vector![x0, xp0];
+        let mut y_state = vector![x0, xp0];
 
         for (r, g, length) in regions {
             let n = usize::max((n_steps as f64 * length / total_length) as usize, 4);
@@ -158,8 +156,8 @@ impl Tracker {
                     _ => (drift_matrix(dz), drift_matrix(dz)),
                 };
 
-                x_state = Mx.dot(&x_state);
-                y_state = My.dot(&y_state);
+                x_state = Mx * &x_state;
+                y_state = My * &y_state;
 
                 z.push(z.last().unwrap() + dz);
                 x.push(x_state[0]);
