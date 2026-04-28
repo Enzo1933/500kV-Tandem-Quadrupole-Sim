@@ -214,12 +214,6 @@ impl Tracker {
             let (base_asym, base_size) = Tracker::get_residuals_from_mmf(mmf1, mmf2, beam, geo);
             let cost_base = base_asym.powi(2) + base_size.powi(2);
 
-            // Convergence Check
-            if cost_base < 1e-6 {
-                println!("Gradient Descent converged in {} iterations!", i);
-                return Some((mmf1, mmf2));
-            }
-
             // Calculate Gradient (Slope) with respect to MMF1
             let (n1_asym, n1_size) = Tracker::get_residuals_from_mmf(mmf1 + eps, mmf2, beam, geo);
             let cost_n1 = n1_asym.powi(2) + n1_size.powi(2);
@@ -293,10 +287,10 @@ impl Tracker {
         let g2 = geo.field_gradient(mmf2);
         let target_spot = 0.00001;
 
-        let t = Self::new(beam, geo, g1, g2, 50).unwrap();
+        let t = Self::new(beam, geo, g1, g2, 1000).unwrap();
         // residual 0: x/y asymmetry        → drives mmf1/mmf2 ratio
         // residual 1: average spot size    → drives overall MMF scale
-        let avg = (t.x_f + t.y_f) / 2.0;
+        let avg = (t.x_f.abs() + t.y_f.abs()) / 2.0;
         (t.x_f - t.y_f, avg - target_spot)
     }
 
