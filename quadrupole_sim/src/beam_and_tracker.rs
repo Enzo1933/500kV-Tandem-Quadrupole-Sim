@@ -295,7 +295,7 @@ impl Tracker {
     ) -> (f64, f64) {
         let g1 = geo.field_gradient(mmf1);
         let g2 = geo.field_gradient(mmf2);
-        let target_spot = 0.00001;
+        let target_spot = beam.x0*0.1;
 
         let t = Self::new(beam, geo, g1, g2, 1000).unwrap();
         // residual 0: x/y asymmetry        → drives mmf1/mmf2 ratio
