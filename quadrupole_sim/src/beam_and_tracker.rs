@@ -5,10 +5,7 @@ use nalgebra::{Matrix2, SMatrix, matrix, vector};
 use std::fs::File;
 use std::io::Write;
 
-use crate::{
-    C_TM, PROTON_MASS,
-    magnet::{MagnetGeometry},
-};
+use crate::{C_TM, PROTON_MASS, magnet::MagnetGeometry};
 
 /// Calculates the beam rigidity (B_rho)
 /// Dimensions: T*m
@@ -130,18 +127,21 @@ impl Tracker {
         let x0 = beam.x0;
         let xp0 = beam.xp0;
 
+        let q1_start = 0.0;
         let q1_end = L_mag_m;
-        let q2_start = q1_end + gap_m;
-        let q2_end = q2_start + L_mag_m;
-        let q3_start = q2_end + gap_m;
-        let q3_end = q3_start + L_mag_m;
+
+        let q2_start = L_mag_m + gap_m;
+        let q2_end = L_mag_m + gap_m + L_mag_m;
+
+        let q3_start = 2.0 * L_mag_m + 2.0 * gap_m;
+        let q3_end = 3.0 * L_mag_m + 2.0 * gap_m;
 
         let Brho = beam_rigidity(energy_MeV);
         let total_length = (3.0 * L_mag_m) + (2.0 * gap_m) + drift_m;
 
         // TODO: Implement enge multiplier
         let regions = [
-            ("quad", g1, L_mag_m, 0.0, L_mag_m),
+            ("quad", g1, L_mag_m, q1_start, q1_end),
             ("drift", 0.0, gap_m, 0.0, 0.0),
             ("quad", -g2, L_mag_m, q2_start, q2_end),
             ("drift", 0.0, gap_m, 0.0, 0.0),
@@ -159,7 +159,7 @@ impl Tracker {
         for (r, g, length, z_entry, z_exit) in regions {
             let n = usize::max((n_steps as f64 * length / total_length) as usize, 4);
             let dz = length / n as f64;
-            
+
             for _ in 0..n {
                 let z_current = z.last().unwrap() + dz;
 
@@ -175,7 +175,7 @@ impl Tracker {
                 x_state = Mx * &x_state;
                 y_state = My * &y_state;
 
-                z.push(z.last().unwrap() + dz);
+                z.push(z_current + dz);
                 x.push(x_state[0]);
                 y.push(y_state[0]);
             }
