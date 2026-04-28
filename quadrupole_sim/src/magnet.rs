@@ -37,7 +37,7 @@ impl MagnetGeometry {
     /// Calculates the reluctances of the nodes in the magnet
     pub fn calculate_reluctances(&self, mu_eff: f64) -> (f64, f64, f64) {
         // Reluctance of the gap
-        let R_gap = 2.0 * self.r_gap / (MU0 * self.l_mag * self.w_pole);
+        let R_gap = self.r_gap / (MU0 * self.l_mag * self.w_pole);
 
         // Use the permeance of the leak to calculate the reluctance of the leaking flux
         let P_leak = MU0 * self.l_mag * (1.0 + self.w_pole / self.r_gap).ln() / PI;
@@ -123,5 +123,21 @@ impl MagnetGeometry {
     pub fn field_gradient(&self, mmf: f64) -> f64 {
         let b = self.solve_b_pole(mmf);
         (2.0 * b) / self.r_gap
+    }
+
+    /// The enge multiplier function f(z)
+    /// G(z) = G_0 * f(z)
+    /// Params: z = Current z, z_0 = Effective edge 
+    pub fn enge_multiplier(&self, z: f64, z_0: f64) -> f64 {
+        let a0 = 0.5;
+        let a1 = 1.0;
+        let a2 = 0.0;
+        let a3 = 0.1;
+        let a4 = 0.0;
+        let a5 = 0.0;
+
+        let m = (z - z_0) / (self.r_gap); 
+
+        1.0 / (1.0 + a0 + a1*m + a2*m.powf(2.0) + a3*m.powf(3.0) + a4*m.powf(4.0) + a5*m.powf(5.0)) 
     }
 }

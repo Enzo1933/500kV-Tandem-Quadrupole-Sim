@@ -130,6 +130,7 @@ impl Tracker {
         let Brho = beam_rigidity(energy_MeV);
         let total_length = (3.0 * L_mag_m) + (2.0 * gap_m) + drift_m;
 
+        // TODO: Implement enge multiplier
         let regions = [
             ("quad", g1, L_mag_m),   // Q1
             ("drift", 0.0, gap_m),   // Gap 1
@@ -291,7 +292,7 @@ impl Tracker {
         // residual 0: x/y asymmetry        → drives mmf1/mmf2 ratio
         // residual 1: average spot size    → drives overall MMF scale
         let avg = (t.x_f.abs() + t.y_f.abs()) / 2.0;
-        
+
         // Replace the return of get_residuals_from_mmf
         let asymmetry_error = (t.x_f.abs() - t.y_f.abs()).powi(2);
         let size_error = (avg - target_spot).powi(2);
