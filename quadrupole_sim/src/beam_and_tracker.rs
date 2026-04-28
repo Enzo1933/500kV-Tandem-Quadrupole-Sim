@@ -7,7 +7,7 @@ use std::io::Write;
 
 use crate::{
     C_TM, PROTON_MASS,
-    magnet::{self, MagnetGeometry},
+    magnet::{MagnetGeometry},
 };
 
 /// Calculates the beam rigidity (B_rho)
