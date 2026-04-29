@@ -20,53 +20,6 @@ pub fn beam_rigidity(ke_mev: f64) -> f64 {
     p / C_TM
 }
 
-/// Runge-Kutta
-
-/// Calculates the quadrupole transfer matrix
-fn quad_transfer_matrix(
-    g: f64,     // Field gradient
-    L: f64,     // Effective length
-    B_rho: f64, // The beam rigidity
-) -> (SMatrix<f64, 2, 2>, SMatrix<f64, 2, 2>) {
-    let k = g / B_rho; // Focusing strength
-    let kr = k.abs().sqrt();
-
-    if k.abs() < 1e-9 {
-        // Near-zero gradient: both planes are drifts
-        let drift = drift_matrix(L);
-        return (drift.clone(), drift);
-    }
-
-    if k > 0.0 {
-        // Focusing in x, Defocusing in y
-        let M_x = matrix!
-            [(L * kr).cos(), (L * kr).sin() / kr;
-            -1.0 * (L * kr).sin() * kr, (L * kr).cos()];
-
-        let M_y = matrix!
-            [(L * kr).cosh(), (L * kr).sinh() / kr;
-            (L * kr).sinh() * kr, (L * kr).cosh()];
-
-        (M_x, M_y)
-    } else {
-        // Defocusing in x, Focusing in y
-        let M_y = matrix!
-            [(L * kr).cos(), (L * kr).sin() / kr;
-            -1.0 * (L * kr).sin() * kr, (L * kr).cos()];
-
-        let M_x = matrix!
-            [(L * kr).cosh(), (L * kr).sinh() / kr;
-            (L * kr).sinh() * kr, (L * kr).cosh()];
-
-        (M_x, M_y)
-    }
-}
-
-/// Returns a drift matrix
-fn drift_matrix(L: f64) -> Matrix2<f64> {
-    matrix![1.0, L; 0.0, 1.0]
-}
-
 fn find_crossovers(arr: &[f64], z: &[f64]) -> Vec<f64> {
     let mut crossovers = Vec::new();
     for i in 1..arr.len() {
