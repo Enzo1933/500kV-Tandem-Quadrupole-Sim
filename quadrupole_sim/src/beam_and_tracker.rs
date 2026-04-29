@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use anyhow::{Ok, Result};
-use nalgebra::{SMatrix, Vector2, vector};
+use nalgebra::{Vector2, vector};
 use std::fs::File;
 use std::io::Write;
 
@@ -174,67 +174,52 @@ impl Tracker {
         })
     }
 
-    /// Optimize magneto-motive force using Newton-Raphson
+    /// Optimize magneto-motive force 
+    /// TODO: Fix this stuff
     pub fn optimize_mmf(beam: &Beam, geo: &MagnetGeometry) -> Option<(f64, f64)> {
-        let mmf = Tracker::calculate_realistic_guess(beam, geo);
-        let (mut mmf1, mut mmf2) = (mmf[0], mmf[1]);
+        let mmf = Self::calculate_realistic_guess(beam, geo);
+        let mut mmf1 = mmf[0];
+        let mut mmf2 = mmf[1];
 
-        let mut lambda = 1e3;
-        let max_iter = 50;
-
+        let lambda = 0.1; // damping 
+        let max_iter = 200;
+        
         for i in 0..max_iter {
             let r = get_residuals_from_mmf(mmf1, mmf2, beam, geo);
-            let J = jacobian(mmf1, mmf2, beam, geo);
-
-            let cost = r[0] * r[0] + r[1] * r[1];
-
-            println!("Iter {i:2} | MMF=({mmf1:.1},{mmf2:.1}) | Cost={cost:.3e} | λ={lambda:.1e}");
+            let r1 = r[0];
+            let r2 = r[1];
+            
+            let cost = r1 * r1 + r2 * r2;
+            println!("Iter {i:2} | MMF1: {mmf1:.1} MMF2: {mmf2:.1} | Cost: {cost:.3e}");
 
             if cost < 1e-8 {
-                println!("Converged.");
+                println!("Converged at iter {i}");
                 break;
             }
-
-            // Compute J^T J and J^T r
-            let jt = J.transpose();
-            let jt_j = jt * J;
-            let jt_r = jt * r;
-
-            // Add damping: (JᵀJ + λI)
-            let A = jt_j + lambda * SMatrix::<f64, 2, 2>::identity();
-            let det = A.determinant();
-
-            if det.abs() < 1e-12 {
-                println!("Singular system.");
+            
+            let J = jacobian(mmf1, mmf2, beam, geo);
+            let det = J.determinant();
+            
+            if det.abs() < 1e-14 {
+                println!("Singular Jacobian at iter {i} — stopping");
                 break;
             }
+            
+            let delta = (1.0/det) * J*r;
+            let delta_mmf1 = delta[0];
+            let delta_mmf2 = delta[1];
 
-            // Solve A Δx = -Jᵀr
-            let dx = -1.0 * A * jt_r;
-            let mmf_new = mmf + dx;
-
-            let new_mmf1 = mmf_new[0];
-            let new_mmf2 = mmf_new[0];
-
-            let new_r = get_residuals_from_mmf(new_mmf1, new_mmf2, beam, geo);
-            let new_cost = new_r[0] * new_r[0] + new_r[1] * new_r[1];
-
-            // Accept or reject step
-            if new_cost < cost {
-                mmf1 = new_mmf1;
-                mmf2 = new_mmf2;
-
-                lambda *= 0.3; // trust Newton more
-            } else {
-                lambda *= 5.0; // trust gradient more
-            }
-
-            // Clamp physically
-            mmf1 = mmf1.clamp(1e3, 1e6);
-            mmf2 = mmf2.clamp(1e3, 1e6);
+            mmf1 = (mmf1 - lambda * delta_mmf1).clamp(100.0, 500_000.0);
+            mmf2 = (mmf2 - lambda * delta_mmf2).clamp(100.0, 500_000.0);
         }
 
-        println!("Final: MMF1={mmf1:.1}, MMF2={mmf2:.1}");
+        let ratio = mmf2 / mmf1;
+
+        if ratio > 2.0 || ratio < 1.5 {
+            eprintln!("mmf2/mmf1 {ratio:?}, perhaps reconsider your options")
+        }
+
+        println!("Final: MMF1={mmf1:.1} MMF2={mmf2:.1}");
         Some((mmf1, mmf2))
     }
 

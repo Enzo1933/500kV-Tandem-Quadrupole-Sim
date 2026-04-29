@@ -128,7 +128,7 @@ impl MagnetGeometry {
     /// Params: z = Current z, z_0 = Effective edge
     pub fn enge_multiplier(&self, z: f64, z_0: f64) -> f64 {
         let a0 = 0.478959;
-        let a1 = 4.533229;
+        let a1 = 1.911289;
         let a2 = -1.185953;
         let a3 = 1.630554;
         let a4 = -1.082657;
@@ -177,7 +177,7 @@ impl MagnetGeometry {
                 let z = z_min + i as f64 * dz;
 
                 let f_entry = self.enge_multiplier(z, z_entry);
-                let f_exit = self.enge_multiplier(-z, -z_exit);
+                let f_exit = self.enge_multiplier(-(z - z_exit), 0.0);
 
                 (f_entry * f_exit) * dz
             })
