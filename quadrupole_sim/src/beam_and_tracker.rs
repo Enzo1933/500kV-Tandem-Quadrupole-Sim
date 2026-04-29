@@ -174,53 +174,54 @@ impl Tracker {
         })
     }
 
-    /// Optimize magneto-motive force using gradient descent
+    /// Optimize magneto-motive force using Newton-Raphson
     pub fn optimize_mmf(beam: &Beam, geo: &MagnetGeometry) -> Option<(f64, f64)> {
         let (mut mmf1, mut mmf2) = Self::calculate_realistic_guess(beam, geo);
 
-        // The "Learning Rate" controls how big of a step to take.
-        // The cost function outputs tiny numbers (meters squared),
-        // and MMF is huge (Amp-turns), this needs to be a large multiplier.
-        let mut learning_rate = 1.0e6;
-        let eps = 500.0; // Finite difference nudge
+        let eps = 50.0; // finite difference step [A·t]
+        let lambda = 0.5; // damping — prevents overshoot
+        let max_iter = 50;
 
-        for i in 0..1000 {
-            // 1. Calculate Base Cost
-            let (base_asym, base_size) = Tracker::get_residuals_from_mmf(mmf1, mmf2, beam, geo);
-            let cost_base = base_asym.powi(2) + base_size.powi(2);
+        for i in 0..max_iter {
+            let (r1, r2) = Self::get_residuals_from_mmf(mmf1, mmf2, beam, geo);
 
-            if cost_base < 1e-3 {
+            let cost = r1 * r1 + r2 * r2;
+            println!("Iter {i:2} | MMF1: {mmf1:.1} MMF2: {mmf2:.1} | Cost: {cost:.3e}");
+
+            if cost < 1e-8 {
                 println!("Converged at iter {i}");
                 break;
             }
 
-            // Calculate Gradient (Slope) with respect to MMF1
-            let (n1_asym, n1_size) = Tracker::get_residuals_from_mmf(mmf1 + eps, mmf2, beam, geo);
-            let cost_n1 = n1_asym.powi(2) + n1_size.powi(2);
-            let dcost_dmmf1 = (cost_n1 - cost_base) / eps;
+            // Jacobian via finite differences
+            let (r1_d1, r2_d1) = Self::get_residuals_from_mmf(mmf1 + eps, mmf2, beam, geo);
+            let (r1_d2, r2_d2) = Self::get_residuals_from_mmf(mmf1, mmf2 + eps, beam, geo);
 
-            // Calculate Gradient (Slope) with respect to MMF2
-            let (n2_asym, n2_size) = Tracker::get_residuals_from_mmf(mmf1, mmf2 + eps, beam, geo);
-            let cost_n2 = n2_asym.powi(2) + n2_size.powi(2);
-            let dcost_dmmf2 = (cost_n2 - cost_base) / eps;
+            let j11 = (r1_d1 - r1) / eps; // d(asym)  / d(mmf1)
+            let j21 = (r2_d1 - r2) / eps; // d(size)  / d(mmf1)
+            let j12 = (r1_d2 - r1) / eps; // d(asym)  / d(mmf2)
+            let j22 = (r2_d2 - r2) / eps; // d(size)  / d(mmf2)
 
-            // Take a step DOWNHILL (subtracting the gradient)
-            mmf1 -= learning_rate * dcost_dmmf1;
-            mmf2 -= learning_rate * dcost_dmmf2;
+            let det = j11 * j22 - j12 * j21;
 
-            // // Adaptive Learning Rate (Slow down as you get closer to the bottom)
-            if i % 100 == 0 {
-                println!(
-                    "Iter {i:3} | MMF1: {mmf1:.1}, MMF2: {mmf2:.1} | Cost: {cost_n1:.2e}, {cost_n2:.2e}"
-                );
-                learning_rate *= 0.75; // Shrink the step size slightly over time for stability
+            if det.abs() < 1e-14 {
+                println!("Singular Jacobian at iter {i} — stopping");
+                break;
             }
+
+            // Analytic 2x2 inverse
+            let delta_mmf1 = (j22 * r1 - j12 * r2) / det;
+            let delta_mmf2 = (-j21 * r1 + j11 * r2) / det;
+
+            mmf1 -= lambda * delta_mmf1;
+            mmf2 -= lambda * delta_mmf2;
+
+            // Clamp to physical range
+            mmf1 = mmf1.clamp(100.0, 500_000.0);
+            mmf2 = mmf2.clamp(100.0, 500_000.0);
         }
 
-        println!(
-            "Hit max iterations. Final MMF1: {:.1}, MMF2: {:.1}",
-            mmf1, mmf2
-        );
+        println!("Final: MMF1={mmf1:.1} MMF2={mmf2:.1}");
         Some((mmf1, mmf2))
     }
 
