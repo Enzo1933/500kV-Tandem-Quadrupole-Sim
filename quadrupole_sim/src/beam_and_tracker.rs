@@ -98,7 +98,6 @@ impl Tracker {
         let Brho = beam_rigidity(energy_MeV);
         let total_length = (3.0 * L_mag_m) + (2.0 * gap_m) + drift_m;
 
-        // TODO: Implement enge multiplier
         let L_eff_q1 = geo.effective_length(q1_start, q1_end);
         let L_eff_q2 = geo.effective_length(q2_start, q2_end);
         let L_eff_q3 = geo.effective_length(q3_start, q3_end);
