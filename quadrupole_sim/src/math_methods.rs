@@ -31,7 +31,12 @@ where
     state + (dz / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 }
 
-pub fn get_residuals_from_mmf(mmf1: f64, mmf2: f64, beam: &Beam, geo: &MagnetGeometry) -> Vector2<f64> {
+pub fn get_residuals_from_mmf(
+    mmf1: f64,
+    mmf2: f64,
+    beam: &Beam,
+    geo: &MagnetGeometry,
+) -> Vector2<f64> {
     let g1 = geo.field_gradient(mmf1);
     let g2 = geo.field_gradient(mmf2);
     let target_spot = beam.x0 * 0.1;

@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 
 use anyhow::{Ok, Result};
-use nalgebra::{Matrix, SMatrix, Vector2, vector};
-use std::{convert::identity, fs::File};
+use nalgebra::{SMatrix, Vector2, vector};
+use std::fs::File;
 use std::io::Write;
 
 use crate::{
@@ -201,7 +201,7 @@ impl Tracker {
             let jt_r = jt * r;
 
             // Add damping: (JᵀJ + λI)
-            let A = jt_j + lambda*SMatrix::<f64, 2, 2>::identity();
+            let A = jt_j + lambda * SMatrix::<f64, 2, 2>::identity();
             let det = A.determinant();
 
             if det.abs() < 1e-12 {
@@ -210,7 +210,7 @@ impl Tracker {
             }
 
             // Solve A Δx = -Jᵀr
-            let dx = -1.0 * A * jt_r ;
+            let dx = -1.0 * A * jt_r;
             let mmf_new = mmf + dx;
 
             let new_mmf1 = mmf_new[0];
