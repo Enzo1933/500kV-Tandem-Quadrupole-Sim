@@ -1,14 +1,14 @@
 #![allow(non_snake_case)]
 
 use anyhow::{Ok, Result};
-use nalgebra::vector;
-use std::fs::File;
+use nalgebra::{Matrix, SMatrix, Vector2, vector};
+use std::{convert::identity, fs::File};
 use std::io::Write;
 
 use crate::{
     C_TM, PROTON_MASS,
     magnet::MagnetGeometry,
-    math_methods::{rk4_step, x_prime, y_prime},
+    math_methods::{get_residuals_from_mmf, jacobian, rk4_step, x_prime, y_prime},
 };
 
 /// Calculates the beam rigidity (B_rho)
@@ -176,57 +176,70 @@ impl Tracker {
 
     /// Optimize magneto-motive force using Newton-Raphson
     pub fn optimize_mmf(beam: &Beam, geo: &MagnetGeometry) -> Option<(f64, f64)> {
-        let (mut mmf1, mut mmf2) = Self::calculate_realistic_guess(beam, geo);
+        let mmf = Tracker::calculate_realistic_guess(beam, geo);
+        let (mut mmf1, mut mmf2) = (mmf[0], mmf[1]);
 
-        let eps = 50.0; // finite difference step [A·t]
-        let lambda = 0.5; // damping — prevents overshoot
+        let mut lambda = 1e3;
         let max_iter = 50;
 
         for i in 0..max_iter {
-            let (r1, r2) = Self::get_residuals_from_mmf(mmf1, mmf2, beam, geo);
+            let r = get_residuals_from_mmf(mmf1, mmf2, beam, geo);
+            let J = jacobian(mmf1, mmf2, beam, geo);
 
-            let cost = r1 * r1 + r2 * r2;
-            println!("Iter {i:2} | MMF1: {mmf1:.1} MMF2: {mmf2:.1} | Cost: {cost:.3e}");
+            let cost = r[0] * r[0] + r[1] * r[1];
+
+            println!("Iter {i:2} | MMF=({mmf1:.1},{mmf2:.1}) | Cost={cost:.3e} | λ={lambda:.1e}");
 
             if cost < 1e-8 {
-                println!("Converged at iter {i}");
+                println!("Converged.");
                 break;
             }
 
-            // Jacobian via finite differences
-            let (r1_d1, r2_d1) = Self::get_residuals_from_mmf(mmf1 + eps, mmf2, beam, geo);
-            let (r1_d2, r2_d2) = Self::get_residuals_from_mmf(mmf1, mmf2 + eps, beam, geo);
+            // Compute J^T J and J^T r
+            let jt = J.transpose();
+            let jt_j = jt * J;
+            let jt_r = jt * r;
 
-            let j11 = (r1_d1 - r1) / eps; // d(asym)  / d(mmf1)
-            let j21 = (r2_d1 - r2) / eps; // d(size)  / d(mmf1)
-            let j12 = (r1_d2 - r1) / eps; // d(asym)  / d(mmf2)
-            let j22 = (r2_d2 - r2) / eps; // d(size)  / d(mmf2)
+            // Add damping: (JᵀJ + λI)
+            let A = jt_j + lambda*SMatrix::<f64, 2, 2>::identity();
+            let det = A.determinant();
 
-            let det = j11 * j22 - j12 * j21;
-
-            if det.abs() < 1e-14 {
-                println!("Singular Jacobian at iter {i} — stopping");
+            if det.abs() < 1e-12 {
+                println!("Singular system.");
                 break;
             }
 
-            // Analytic 2x2 inverse
-            let delta_mmf1 = (j22 * r1 - j12 * r2) / det;
-            let delta_mmf2 = (-j21 * r1 + j11 * r2) / det;
+            // Solve A Δx = -Jᵀr
+            let dx = -1.0 * A * jt_r ;
+            let mmf_new = mmf + dx;
 
-            mmf1 -= lambda * delta_mmf1;
-            mmf2 -= lambda * delta_mmf2;
+            let new_mmf1 = mmf_new[0];
+            let new_mmf2 = mmf_new[0];
 
-            // Clamp to physical range
-            mmf1 = mmf1.clamp(100.0, 500_000.0);
-            mmf2 = mmf2.clamp(100.0, 500_000.0);
+            let new_r = get_residuals_from_mmf(new_mmf1, new_mmf2, beam, geo);
+            let new_cost = new_r[0] * new_r[0] + new_r[1] * new_r[1];
+
+            // Accept or reject step
+            if new_cost < cost {
+                mmf1 = new_mmf1;
+                mmf2 = new_mmf2;
+
+                lambda *= 0.3; // trust Newton more
+            } else {
+                lambda *= 5.0; // trust gradient more
+            }
+
+            // Clamp physically
+            mmf1 = mmf1.clamp(1e3, 1e6);
+            mmf2 = mmf2.clamp(1e3, 1e6);
         }
 
-        println!("Final: MMF1={mmf1:.1} MMF2={mmf2:.1}");
+        println!("Final: MMF1={mmf1:.1}, MMF2={mmf2:.1}");
         Some((mmf1, mmf2))
     }
 
     /// Generates a physically realistic starting guess for MMF based on optical focal length
-    pub fn calculate_realistic_guess(beam: &Beam, geo: &MagnetGeometry) -> (f64, f64) {
+    pub fn calculate_realistic_guess(beam: &Beam, geo: &MagnetGeometry) -> Vector2<f64> {
         // Thin Lens Approximation
         let required_focal_length = beam.drift_m;
 
@@ -246,7 +259,7 @@ impl Tracker {
         let flux_total = b_pole_estimate * geo.a_iron;
         let base_mmf = flux_total * r_total;
 
-        // Apply the Triplet Ratio Rule (Inner quad is ~1.6x stronger)
+        // Triplet Ratio Rule (Inner quad is ~1.6x stronger)
         let mmf1_guess = base_mmf;
         let mmf2_guess = base_mmf * 1.6;
 
@@ -255,26 +268,7 @@ impl Tracker {
             mmf1_guess, mmf2_guess
         );
 
-        (mmf1_guess, mmf2_guess)
-    }
-
-    fn get_residuals_from_mmf(
-        mmf1: f64,
-        mmf2: f64,
-        beam: &Beam,
-        geo: &MagnetGeometry,
-    ) -> (f64, f64) {
-        let g1 = geo.field_gradient(mmf1);
-        let g2 = geo.field_gradient(mmf2);
-        let target_spot = beam.x0 * 0.1;
-
-        let t = Self::new(beam, geo, g1, g2, 75).unwrap();
-        // residual 0: x/y asymmetry        → drives mmf1/mmf2 ratio
-        // residual 1: average spot size    → drives overall MMF scale
-        let avg = (t.x_f.abs() + t.y_f.abs()) / 2.0;
-
-        // Return squared values to provide a steep optimization 'bowl'
-        (t.x_f - t.y_f, avg - target_spot)
+        vector![mmf1_guess, mmf2_guess]
     }
 
     /// Exports the optimized profile as a CSV for IBSimu import.
