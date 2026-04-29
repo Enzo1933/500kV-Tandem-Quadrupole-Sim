@@ -4,8 +4,7 @@ version = "1.0.0"
 edition = "2024"
 
 [profile.dev]
-opt-level = 3
-incremental = true
+opt-level = 2
 
 [dependencies]
 nalgebra = "0.34.2"
