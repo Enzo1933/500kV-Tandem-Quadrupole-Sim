@@ -167,7 +167,7 @@ impl MagnetGeometry {
     /// Effective magnetic length — integral of f(z) dz
     /// Numerically integrate the Enge function over a wide range
     pub fn effective_length(&self, z_entry: f64, z_exit: f64) -> f64 {
-        let n = 500;
+        let n = 600;
         let z_min = z_entry - 5.0 * self.bore;
         let z_max = z_exit + 5.0 * self.bore;
         let dz = (z_max - z_min) / n as f64;
