@@ -175,13 +175,11 @@ impl Tracker {
     }
 
     /// Optimize magneto-motive force
-    /// TODO: Fix this stuff
     pub fn optimize_mmf(beam: &Beam, geo: &MagnetGeometry) -> Option<(f64, f64)> {
         let mmf = Self::calculate_realistic_guess(beam, geo);
         let mut mmf1 = mmf[0];
         let mut mmf2 = mmf[1];
 
-        // let lambda = 0.075; // damping
         let max_iter = 250;
 
         for i in 0..max_iter {
@@ -207,14 +205,13 @@ impl Tracker {
             let mut delta = inv_j * r;
 
             // Never allow a step larger than 20% of the current MMF.
-            // Stops the "teleportation" into saturation walls.
             let max_step1 = mmf1 * 0.20;
             let max_step2 = mmf2 * 0.20;
 
             delta[0] = delta[0].clamp(-max_step1, max_step1);
             delta[1] = delta[1].clamp(-max_step2, max_step2);
 
-            // 2. APPLY THE UPDATE (with a modest lambda damping, e.g., 0.5)
+            // APPLY THE UPDATE (with a modest lambda damping, e.g., 0.5)
             let lambda = 0.5;
             mmf1 = (mmf1 - delta[0] * lambda).clamp(10.0, 250_000.0);
             mmf2 = (mmf2 - delta[1] * lambda).clamp(10.0, 250_000.0);
