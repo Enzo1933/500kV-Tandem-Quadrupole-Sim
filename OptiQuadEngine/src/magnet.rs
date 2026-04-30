@@ -111,7 +111,8 @@ impl MagnetGeometry {
         let discriminant = b_coeff.powi(2) - 4.0 * a * c;
 
         if discriminant < 0.0 {
-            panic!("Fatal: Negative discriminant when running solving for B pole")
+            eprintln!("Fatal: Negative discriminant when running solving for B pole");
+            std::process::exit(1);
         }
 
         let final_b_iron = ((-b_coeff - discriminant.sqrt()) / (2.0 * a)).clamp(0.0, self.b_sat);
