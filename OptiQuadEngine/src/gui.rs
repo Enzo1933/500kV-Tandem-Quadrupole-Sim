@@ -456,10 +456,6 @@ impl QuadApp {
             .num_columns(2)
             .spacing([8.0, 4.0])
             .show(ui, |ui| {
-                ui.label("Bρ");
-                ui.label(format!("{:.4} T·m", beam_rigidity(self.energy_mev)));
-                ui.end_row();
-
                 ui.label("x crossovers");
                 ui.label(if t.x_xover.is_empty() {
                     "none".into()

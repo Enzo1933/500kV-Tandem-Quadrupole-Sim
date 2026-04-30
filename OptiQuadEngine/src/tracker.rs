@@ -209,7 +209,7 @@ impl QuadTracker {
         let k_estimate = 1.0 / (required_focal_length * geo.l_mag);
 
         // k = g / Brho  =>  g = k * Brho
-        let g_estimate = k_estimate * beam_rigidity(beam.energy_MeV);
+        let g_estimate = k_estimate * beam.beam_rigidity();
         // g = (2 * B_pole) / r  =>  B_pole = (g * r) / 2
         let b_pole_estimate = (g_estimate * geo.bore) / 2.0;
 
