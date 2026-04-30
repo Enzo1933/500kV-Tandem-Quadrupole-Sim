@@ -1,7 +1,8 @@
 use nalgebra::{SMatrix, Vector2, matrix, vector};
 
 use crate::{
-    beam_and_tracker::{Beam, QuadTracker},
+    tracker::{QuadTracker},
+    beam:: Beam,
     magnet::MagnetGeometry,
 };
 
