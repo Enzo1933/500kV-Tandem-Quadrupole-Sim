@@ -145,7 +145,7 @@ impl eframe::App for QuadApp {
         // ── Top bar ──────────────────────────────────────────
         egui::TopBottomPanel::top("title").show(ctx, |ui| {
             ui.add_space(4.0);
-            ui.heading("Quadrupole Optimization Engine — 1 MeV Proton Beam");
+            ui.heading("RITACCEL Engine");
             ui.add_space(4.0);
         });
 
