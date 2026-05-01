@@ -19,7 +19,7 @@ Because the non-relativistic beam decelerates (or accelerates) inside the lens, 
 $$V(z) = V_0 + \Phi(z)$$
 *(Where $V_0$ is the initial extraction voltage of the ion source).*
 
-### 1.3 The Paraxial Ray Equation & The Picht Substitution
+### The Paraxial Ray Equation & The Picht Substitution
 The trajectory of a particle in an electrostatic field with rotational symmetry is governed by the Paraxial Ray Equation:
 $$r'' + \frac{V'(z)}{2V(z)}r' + \frac{V''(z)}{4V(z)}r = 0$$
 
@@ -33,7 +33,7 @@ $$R'' = -\frac{3}{16} \left(\frac{V'(z)}{V(z)}\right)^2 R$$
 
 **Physics Implication:** Because the coefficient on the right side of the equation is strictly negative, the resulting force is *always* a restoring force toward the center axis. This provides the mathematical guarantee that an Einzel lens is always focusing, regardless of the applied voltage polarity.
 
-### 1.4 The Numerical Engine: Piecewise Matrix Slicing
+### The Numerical Engine: Piecewise Matrix Slicing
 Notice that the Reduced Paraxial Ray Equation takes the exact form of a **Simple Harmonic Oscillator**: $x'' = -\omega^2 x$. The "focusing frequency" at any localized point $z$ is:
 $$\omega(z) = \frac{\sqrt{3}}{4} \left| \frac{V'(z)}{V(z)} \right|$$
 
