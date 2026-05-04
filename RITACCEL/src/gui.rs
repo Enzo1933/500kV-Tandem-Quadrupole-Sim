@@ -176,13 +176,13 @@ impl eframe::App for QuadApp {
             ui.horizontal(|ui| {
                 ui.selectable_value(
                     &mut self.active_plot,
-                    PlotView::QuadEnvelope,
-                    "⬛ Quad Envelope",
+                    PlotView::EinzelProfile,
+                    "⚡ Einzel Profile",
                 );
                 ui.selectable_value(
                     &mut self.active_plot,
-                    PlotView::EinzelProfile,
-                    "⚡ Einzel Profile",
+                    PlotView::QuadEnvelope,
+                    "⬛ Quad Envelope",
                 );
             });
             ui.separator();
