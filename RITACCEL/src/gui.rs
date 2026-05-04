@@ -17,6 +17,7 @@ pub struct QuadApp {
     // ── Beam ─────────────────────────────────────────────────
     drift_in: f64,
     energy_mev: f64,
+    charge: f64,
     x0_mm: f64,
     xp0_mrad: f64,
 
@@ -89,6 +90,7 @@ impl Default for QuadApp {
         Self {
             drift_in: 18.0,
             energy_mev: 1.0,
+            charge: 1.0,
             x0_mm: 5.0,
             xp0_mrad: 30.0,
 
@@ -239,15 +241,14 @@ impl QuadApp {
             .show(ui, |ui| {
                 ui.label("U_outer (V)");
                 ui.add(
-                    egui::Slider::new(&mut self.einzel_u_outer, -20000.0..=20000.0)
+                    egui::Slider::new(&mut self.einzel_u_outer, -500000.0..=1000000.0)
                         .step_by(100.0),
                 );
                 ui.end_row();
 
                 ui.label("U_mid (V)");
                 ui.add(
-                    egui::Slider::new(&mut self.einzel_u_mid, -20000.0..=20000.0)
-                        .step_by(100.0),
+                    egui::Slider::new(&mut self.einzel_u_mid, -500000.0..=1000000.0).step_by(100.0),
                 );
                 ui.end_row();
 
@@ -260,9 +261,7 @@ impl QuadApp {
                 ui.end_row();
 
                 ui.label("Track start z (mm)");
-                ui.add(
-                    egui::Slider::new(&mut self.einzel_start_z_mm, -500.0..=0.0).step_by(5.0),
-                );
+                ui.add(egui::Slider::new(&mut self.einzel_start_z_mm, -500.0..=0.0).step_by(5.0));
                 ui.end_row();
 
                 ui.label("Track end z (mm)");
@@ -388,9 +387,7 @@ impl QuadApp {
         let needs_quad = matches!(self.active_tab, Tab::Results | Tab::Fluxes | Tab::Energies);
         if needs_quad && self.tracker.is_none() {
             ui.add_space(20.0);
-            ui.label(
-                egui::RichText::new("Run the optimizer first.").color(egui::Color32::GRAY),
-            );
+            ui.label(egui::RichText::new("Run the optimizer first.").color(egui::Color32::GRAY));
             return;
         }
 
@@ -749,12 +746,7 @@ impl QuadApp {
 
         // ── Envelope health ───────────────────────────────────
         ui.label(egui::RichText::new("Beam Envelope").strong());
-        let max_r_mm = et
-            .r_phys
-            .iter()
-            .map(|r| r.abs())
-            .fold(0.0_f64, f64::max)
-            * 1000.0;
+        let max_r_mm = et.r_phys.iter().map(|r| r.abs()).fold(0.0_f64, f64::max) * 1000.0;
         let r_cyl = self.einzel_r_mm;
         let fill_pct = (max_r_mm / r_cyl) * 100.0;
         let clipped = max_r_mm > r_cyl;
@@ -785,7 +777,11 @@ impl QuadApp {
                     } else {
                         egui::Color32::from_rgb(60, 200, 100)
                     },
-                    format!("{:.1} %{}", fill_pct, if clipped { "  ⚠ CLIPPED" } else { "" }),
+                    format!(
+                        "{:.1} %{}",
+                        fill_pct,
+                        if clipped { "  ⚠ CLIPPED" } else { "" }
+                    ),
                 );
                 ui.end_row();
 
@@ -799,11 +795,10 @@ impl QuadApp {
         // ── Voltage stats ─────────────────────────────────────
         ui.label(egui::RichText::new("On-axis Voltage").strong());
         let geo = self.make_einzel_geo();
-        let peak_v = et
-            .z
-            .iter()
-            .map(|&z| geo.voltage(z).abs())
-            .fold(0.0_f64, f64::max);
+        let peak_v =
+            et.z.iter()
+                .map(|&z| geo.voltage(z).abs())
+                .fold(0.0_f64, f64::max);
         egui::Grid::new("einzel_v_grid")
             .num_columns(2)
             .spacing([8.0, 4.0])
@@ -837,24 +832,26 @@ impl QuadApp {
         ui.label(egui::RichText::new("On-axis E-field").strong());
 
         // Find peak |E| and its z position
-        let (peak_e, peak_e_z_mm) = et
-            .e_field
-            .iter()
-            .zip(et.z.iter())
-            .fold((0.0_f64, 0.0_f64), |(best_e, best_z), (&e, &z)| {
-                if e.abs() > best_e { (e.abs(), z * 1000.0) } else { (best_e, best_z) }
-            });
+        let (peak_e, peak_e_z_mm) = et.e_field.iter().zip(et.z.iter()).fold(
+            (0.0_f64, 0.0_f64),
+            |(best_e, best_z), (&e, &z)| {
+                if e.abs() > best_e {
+                    (e.abs(), z * 1000.0)
+                } else {
+                    (best_e, best_z)
+                }
+            },
+        );
 
         // FWHM-style field width: fraction of z range where |E| > half peak
         let half_peak = peak_e * 0.5;
         let field_width_mm = {
-            let active: Vec<f64> = et
-                .z
-                .iter()
-                .zip(et.e_field.iter())
-                .filter(|(_, e)| e.abs() >= half_peak)
-                .map(|(&z, _)| z * 1000.0)
-                .collect();
+            let active: Vec<f64> =
+                et.z.iter()
+                    .zip(et.e_field.iter())
+                    .filter(|(_, e)| e.abs() >= half_peak)
+                    .map(|(&z, _)| z * 1000.0)
+                    .collect();
             if active.len() >= 2 {
                 active.last().unwrap() - active.first().unwrap()
             } else {
@@ -879,13 +876,12 @@ impl QuadApp {
                 ui.end_row();
 
                 // E-field at the lens centre (z = 0)
-                let e_at_centre = et
-                    .z
-                    .iter()
-                    .zip(et.e_field.iter())
-                    .min_by(|(za, _), (zb, _)| za.abs().partial_cmp(&zb.abs()).unwrap())
-                    .map(|(_, &e)| e)
-                    .unwrap_or(0.0);
+                let e_at_centre =
+                    et.z.iter()
+                        .zip(et.e_field.iter())
+                        .min_by(|(za, _), (zb, _)| za.abs().partial_cmp(&zb.abs()).unwrap())
+                        .map(|(_, &e)| e)
+                        .unwrap_or(0.0);
                 ui.label("E at z = 0");
                 ui.label(format!("{:.2} V/m", e_at_centre));
                 ui.end_row();
@@ -909,30 +905,26 @@ impl QuadApp {
         let bore_mm = self.r_gap_mm;
         let total_mm = t.total_length * 1000.0;
 
-        let x_pos: PlotPoints = t
-            .z
-            .iter()
-            .zip(t.x.iter())
-            .map(|(&z, &x)| [z * 1000.0, x * 1000.0])
-            .collect();
-        let x_neg: PlotPoints = t
-            .z
-            .iter()
-            .zip(t.x.iter())
-            .map(|(&z, &x)| [z * 1000.0, -x * 1000.0])
-            .collect();
-        let y_pos: PlotPoints = t
-            .z
-            .iter()
-            .zip(t.y.iter())
-            .map(|(&z, &y)| [z * 1000.0, y * 1000.0])
-            .collect();
-        let y_neg: PlotPoints = t
-            .z
-            .iter()
-            .zip(t.y.iter())
-            .map(|(&z, &y)| [z * 1000.0, -y * 1000.0])
-            .collect();
+        let x_pos: PlotPoints =
+            t.z.iter()
+                .zip(t.x.iter())
+                .map(|(&z, &x)| [z * 1000.0, x * 1000.0])
+                .collect();
+        let x_neg: PlotPoints =
+            t.z.iter()
+                .zip(t.x.iter())
+                .map(|(&z, &x)| [z * 1000.0, -x * 1000.0])
+                .collect();
+        let y_pos: PlotPoints =
+            t.z.iter()
+                .zip(t.y.iter())
+                .map(|(&z, &y)| [z * 1000.0, y * 1000.0])
+                .collect();
+        let y_neg: PlotPoints =
+            t.z.iter()
+                .zip(t.y.iter())
+                .map(|(&z, &y)| [z * 1000.0, -y * 1000.0])
+                .collect();
 
         Plot::new("envelope")
             .legend(egui_plot::Legend::default())
@@ -1054,17 +1046,11 @@ impl QuadApp {
         let geo = self.make_einzel_geo();
 
         // Compute max r and normalised voltage scale so V(z) fits within ±70% of the beam band
-        let max_r_mm = et
-            .r_phys
-            .iter()
-            .map(|r| r.abs())
-            .fold(0.0_f64, f64::max)
-            * 1000.0;
-        let max_v = et
-            .z
-            .iter()
-            .map(|&z| geo.voltage(z).abs())
-            .fold(0.0_f64, f64::max);
+        let max_r_mm = et.r_phys.iter().map(|r| r.abs()).fold(0.0_f64, f64::max) * 1000.0;
+        let max_v =
+            et.z.iter()
+                .map(|&z| geo.voltage(z).abs())
+                .fold(0.0_f64, f64::max);
         let v_scale_mm_per_v = if max_v > 1e-6 {
             max_r_mm * 0.7 / max_v
         } else {
@@ -1072,11 +1058,7 @@ impl QuadApp {
         };
 
         // Scale E-field so its peak also sits at ~50% of the beam band (separate from V scale)
-        let max_e = et
-            .e_field
-            .iter()
-            .map(|e| e.abs())
-            .fold(0.0_f64, f64::max);
+        let max_e = et.e_field.iter().map(|e| e.abs()).fold(0.0_f64, f64::max);
         let e_scale_mm_per_vm = if max_e > 1e-6 {
             max_r_mm * 0.5 / max_e
         } else {
@@ -1084,33 +1066,29 @@ impl QuadApp {
         };
 
         // Beam envelope (mirrored, in mm)
-        let r_pos: PlotPoints = et
-            .z
-            .iter()
-            .zip(et.r_phys.iter())
-            .map(|(&z, &r)| [z * 1000.0, r.abs() * 1000.0])
-            .collect();
-        let r_neg: PlotPoints = et
-            .z
-            .iter()
-            .zip(et.r_phys.iter())
-            .map(|(&z, &r)| [z * 1000.0, -(r.abs() * 1000.0)])
-            .collect();
+        let r_pos: PlotPoints =
+            et.z.iter()
+                .zip(et.r_phys.iter())
+                .map(|(&z, &r)| [z * 1000.0, r.abs() * 1000.0])
+                .collect();
+        let r_neg: PlotPoints =
+            et.z.iter()
+                .zip(et.r_phys.iter())
+                .map(|(&z, &r)| [z * 1000.0, -(r.abs() * 1000.0)])
+                .collect();
 
         // On-axis voltage profile (scaled to mm for overlay)
-        let v_line: PlotPoints = et
-            .z
-            .iter()
-            .map(|&z| [z * 1000.0, geo.voltage(z) * v_scale_mm_per_v])
-            .collect();
+        let v_line: PlotPoints =
+            et.z.iter()
+                .map(|&z| [z * 1000.0, geo.voltage(z) * v_scale_mm_per_v])
+                .collect();
 
         // On-axis E-field profile (scaled to mm for overlay)
-        let e_line: PlotPoints = et
-            .z
-            .iter()
-            .zip(et.e_field.iter())
-            .map(|(&z, &e)| [z * 1000.0, e * e_scale_mm_per_vm])
-            .collect();
+        let e_line: PlotPoints =
+            et.z.iter()
+                .zip(et.e_field.iter())
+                .map(|(&z, &e)| [z * 1000.0, e * e_scale_mm_per_vm])
+                .collect();
 
         let r_cyl_mm = self.einzel_r_mm;
         let z_start_mm = self.einzel_start_z_mm;
@@ -1120,11 +1098,12 @@ impl QuadApp {
         // capped so they don't run past the tracking window.
         let outer_len = self.einzel_l_mid_mm;
         let outer_l_start = (z_start_mm).max(-half_l - outer_len);
-        let outer_r_end   = (z_end_mm).min( half_l + outer_len);
+        let outer_r_end = (z_end_mm).min(half_l + outer_len);
 
         // Helper: draw a filled-wall cylinder cross-section (top + bottom wall at ±r, left + right end caps)
         let draw_cyl = |plot_ui: &mut egui_plot::PlotUi,
-                        z0: f64, z1: f64,
+                        z0: f64,
+                        z1: f64,
                         col: egui::Color32,
                         label: Option<&str>| {
             let wall_h = r_cyl_mm;
@@ -1138,16 +1117,24 @@ impl QuadApp {
 
             // Top wall rectangle (4 sides)
             let top_pts = vec![
-                [z0, top_inner], [z0, top_outer],
-                [z1, top_outer], [z1, top_inner], [z0, top_inner],
+                [z0, top_inner],
+                [z0, top_outer],
+                [z1, top_outer],
+                [z1, top_inner],
+                [z0, top_inner],
             ];
             let bot_pts = vec![
-                [z0, bot_inner], [z0, bot_outer],
-                [z1, bot_outer], [z1, bot_inner], [z0, bot_inner],
+                [z0, bot_inner],
+                [z0, bot_outer],
+                [z1, bot_outer],
+                [z1, bot_inner],
+                [z0, bot_inner],
             ];
 
             let mut top_line = Line::new(PlotPoints::new(top_pts)).color(col).width(1.5);
-            if let Some(l) = label { top_line = top_line.name(l); }
+            if let Some(l) = label {
+                top_line = top_line.name(l);
+            }
             plot_ui.line(top_line);
             plot_ui.line(Line::new(PlotPoints::new(bot_pts)).color(col).width(1.5));
         };
@@ -1159,8 +1146,14 @@ impl QuadApp {
             .show(ui, |plot_ui| {
                 // ── Outer electrodes (blue-grey) ──────────────────
                 let outer_col = egui::Color32::from_rgba_unmultiplied(120, 160, 210, 180);
-                draw_cyl(plot_ui, outer_l_start, -half_l, outer_col, Some("Outer (U_outer)"));
-                draw_cyl(plot_ui,  half_l, outer_r_end,  outer_col, None);
+                draw_cyl(
+                    plot_ui,
+                    outer_l_start,
+                    -half_l,
+                    outer_col,
+                    Some("Outer (U_outer)"),
+                );
+                draw_cyl(plot_ui, half_l, outer_r_end, outer_col, None);
 
                 // ── Middle electrode (amber) ──────────────────────
                 let mid_col = egui::Color32::from_rgba_unmultiplied(220, 160, 40, 200);
@@ -1215,12 +1208,7 @@ impl QuadApp {
 
                 // ── Beam envelope (green) ─────────────────────────
                 let env_col = egui::Color32::from_rgb(60, 200, 100);
-                plot_ui.line(
-                    Line::new(r_pos)
-                        .color(env_col)
-                        .width(2.5)
-                        .name("r(z)"),
-                );
+                plot_ui.line(Line::new(r_pos).color(env_col).width(2.5).name("r(z)"));
                 plot_ui.line(Line::new(r_neg).color(env_col).width(2.5));
             });
     }
@@ -1257,6 +1245,7 @@ impl QuadApp {
         let beam = Beam::new(
             self.drift_in * 0.0254,
             self.energy_mev,
+            self.charge,
             self.x0_mm * 1e-3,
             self.xp0_mrad * 1e-3,
         );
@@ -1317,6 +1306,7 @@ impl QuadApp {
         let beam = Beam::new(
             self.drift_in * 0.0254,
             self.energy_mev,
+            self.charge,
             self.x0_mm * 1e-3,
             self.xp0_mrad * 1e-3,
         );

@@ -267,7 +267,7 @@ pub struct EinzelTracker {
 impl EinzelTracker {
     /// Track beam through the Einzel lens using the Piecewise Matrix method
     pub fn new(beam: &Beam, geo: &EinzelGeometry, start_z: f64, end_z: f64, dz: f64) -> Self {
-        let v0_beam = beam.energy_MeV * 1_000_000.0; // Conversion to V from MV
+        let v0_beam = beam.charge * beam.energy_MeV * 1_000_000.0; // Conversion to V from MV
 
         // Initialize tracking arrays
         let capacity = ((end_z - start_z) / dz).ceil() as usize;
@@ -281,9 +281,9 @@ impl EinzelTracker {
         let r_prime = 0.0; // Assuming parallel beam entry
 
         let initial_potential = geo.voltage(z);
-        
+
         let v_start = v0_beam; // delta_phi is 0 at the exact start
-        let v_prime_start = geo.e_field(z); 
+        let v_prime_start = geo.e_field(z);
 
         let r_reduced = r * v_start.powf(0.25);
         let r_prime_reduced =
@@ -293,15 +293,22 @@ impl EinzelTracker {
 
         while z <= end_z {
             let local_potential = geo.voltage(z);
-            let e_field_z = geo.e_field(z); 
-            
+            let e_field_z = geo.e_field(z);
+
             let delta_phi = local_potential - initial_potential;
-            let v_current = v0_beam - delta_phi;
+            let v_current = v0_beam - beam.charge * delta_phi;
+
+            if v_current <= 0.0 {
+                panic!("Particle decelerated to 0 eV! Beam reflected at z = {}", z);
+            }
 
             let v_prime_z = e_field_z;
-            let omega = geo.omega(z);
+            let omega = (3.0_f64.sqrt() / 4.0) * (e_field_z / v_current).abs();
 
             let m_slice = EinzelGeometry::transfer_matrix(omega, dz);
+
+            state = m_slice * state;
+
             let current_r_phys = state[0] * v_current.powf(-0.25);
 
             z_arr.push(z);
@@ -313,16 +320,15 @@ impl EinzelTracker {
 
         // Extract Final State for handoff to the Accel Column
         let final_potential = geo.voltage(z);
-        
         let final_v = v0_beam - (final_potential - initial_potential);
         let final_v_prime = geo.e_field(z);
 
         // Reverse Picht Substitution: r = R * V^(-1/4)
         let r_f = state[0] * final_v.powf(-0.25);
-        
+
         // Reverse Product Rule: r' = R' * V^(-1/4) - R * 0.25 * V^(-5/4) * V'
-        let r_prime_f = state[1] * final_v.powf(-0.25) 
-            - state[0] * 0.25 * final_v.powf(-1.25) * final_v_prime;
+        let r_prime_f =
+            state[1] * final_v.powf(-0.25) - state[0] * 0.25 * final_v.powf(-1.25) * final_v_prime;
 
         Self {
             z: z_arr,

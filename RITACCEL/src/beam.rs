@@ -4,15 +4,17 @@ use crate::{C_TM, PROTON_MASS};
 pub struct Beam {
     pub drift_m: f64,    // Drift to the target
     pub energy_MeV: f64, // Kinetic energy
+    pub charge: f64,     // Charge of the beam
     pub x0: f64,         // x
     pub xp0: f64,        // x prime
 }
 
 impl Beam {
-    pub fn new(drift_m: f64, energy_MeV: f64, x0: f64, xp0: f64) -> Self {
+    pub fn new(drift_m: f64, energy_MeV: f64, charge: f64, x0: f64, xp0: f64) -> Self {
         Beam {
             drift_m,
             energy_MeV,
+            charge,
             x0,
             xp0,
         }
