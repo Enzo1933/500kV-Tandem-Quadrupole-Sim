@@ -104,7 +104,7 @@ impl Default for QuadApp {
             gap: 4.0,
 
             einzel_u_outer: 0.0,
-            einzel_u_mid: -5000.0,
+            einzel_u_mid: 0.0,
             einzel_l_mid_mm: 50.0,
             einzel_r_mm: 20.0,
             einzel_start_z_mm: -150.0,
@@ -219,6 +219,10 @@ impl QuadApp {
                 ui.add(egui::Slider::new(&mut self.energy_mev, 0.1..=5.0).step_by(0.1));
                 ui.end_row();
 
+                ui.label("Charge (e)");
+                ui.add(egui::Slider::new(&mut self.charge, 1.0..=92.0).step_by(1.0));
+                ui.end_row();
+
                 ui.label("x₀ (mm)");
                 ui.add(egui::Slider::new(&mut self.x0_mm, 0.5..=20000.0).step_by(0.1));
                 ui.end_row();
@@ -241,19 +245,18 @@ impl QuadApp {
             .show(ui, |ui| {
                 ui.label("U_outer (V)");
                 ui.add(
-                    egui::Slider::new(&mut self.einzel_u_outer, -500000.0..=1000000.0)
-                        .step_by(100.0),
+                    egui::Slider::new(&mut self.einzel_u_outer, 0.0..=1000000.0).step_by(100.0),
                 );
                 ui.end_row();
 
                 ui.label("U_mid (V)");
                 ui.add(
-                    egui::Slider::new(&mut self.einzel_u_mid, -500000.0..=1000000.0).step_by(100.0),
+                    egui::Slider::new(&mut self.einzel_u_mid, 0.0..=1000000.0).step_by(100.0),
                 );
                 ui.end_row();
 
                 ui.label("L_mid (mm)");
-                ui.add(egui::Slider::new(&mut self.einzel_l_mid_mm, 5.0..=200.0).step_by(1.0));
+                ui.add(egui::Slider::new(&mut self.einzel_l_mid_mm, 5.0..=2000.0).step_by(1.0));
                 ui.end_row();
 
                 ui.label("R cylinder (mm)");
